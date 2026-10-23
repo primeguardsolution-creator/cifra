@@ -81,6 +81,8 @@ await db.exec(migration('20261028_000010_delivery_receipts.sql'));
 await db.exec(migration('20261028_000010_delivery_receipts.sql'));
 await db.exec(migration('20261029_000011_greeting_push.sql'));
 await db.exec(migration('20261029_000011_greeting_push.sql'));
+await db.exec(migration('20261030_000012_push_prefs.sql'));
+await db.exec(migration('20261030_000012_push_prefs.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -736,7 +738,18 @@ await check('Web Push: suscribirse, titulos/cuerpos por caso y nadie mas puede p
   // customer -> business: every agent without assignment (owner ana + agent cleo), title names the customer and the business
   const [{ id: m2 }] = await q(`select id from public.messages where conversation_id = $1 and body = 'Hola, gracias'`, [ids._evaConv]);
   const r2 = await q(`select title, body, endpoint from public.push_payloads($1) order by endpoint`, [m2]);
-  eq(r2.map((r) => [r.title, r.body, r.endpoint]), [['Eva · Café Aurora', 'Hola, gracias', 'https://push.example/ana'], ['Eva · Café Aurora', 'Hola, gracias', 'https://push.example/cleo']]);
+  eq(r2.map((r) => [r.title, r.body, r.endpoint]), [['\u{1F4BC} Eva · Café Aurora', 'Hola, gracias', 'https://push.example/ana'], ['\u{1F4BC} Eva · Café Aurora', 'Hola, gracias', 'https://push.example/cleo']]);
+  // each device chooses per space: cleo turns Business off -> only ana is notified; the customer side (personal) is unaffected
+  await as('cleo', () => db.query(`select public.set_push_prefs('https://push.example/cleo', true, false)`));
+  eq((await q(`select endpoint, tag from public.push_payloads($1)`, [m2])).map((r) => r.endpoint), ['https://push.example/ana']);
+  eq((await q(`select tag from public.push_payloads($1)`, [m2]))[0].tag.startsWith('biz-'), true);
+  eq((await q(`select tag from public.push_payloads($1)`, [m1]))[0].tag.startsWith('chat-'), true);
+  await as('eva', () => db.query(`select public.set_push_prefs('https://push.example/eva', false, true)`));
+  eq((await q(`select * from public.push_payloads($1)`, [m1])).length, 0);
+  eq(await as('eva', () => q(`select notify_personal, notify_business from public.get_push_prefs('https://push.example/eva')`)), [{ notify_personal: false, notify_business: true }]);
+  eq(await as('ben', () => q(`select * from public.get_push_prefs('https://push.example/eva')`)), []); // not someone else's device
+  await as('eva', () => db.query(`select public.set_push_prefs('https://push.example/eva', true, true)`));
+  await as('cleo', () => db.query(`select public.set_push_prefs('https://push.example/cleo', true, true)`));
   // incognito: nothing readable travels
   const inc = await as('ana', async () => (await q(`select public.start_incognito_chat($1, 'X') as id`, [ids.ben]))[0].id);
   await as('ana', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'secreto')`, [inc]));

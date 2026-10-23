@@ -1189,4 +1189,12 @@ export const rows: [string, string, string][] = [
   ["Pendiente de activar en el servidor", "Waiting to be enabled on the server", "Auf dem Server noch zu aktivieren"],
   ["Recibe un aviso con cada mensaje nuevo", "Get an alert with every new message", "Erhalte bei jeder neuen Nachricht eine Benachrichtigung"],
   ["Suscripción no válida.", "Invalid subscription.", "Ungültiges Abonnement."],
+  ["Avisos de mensajes personales", "Personal message alerts", "Benachrichtigungen für persönliche Nachrichten"],
+  ["Activados: te avisan aunque la app esté cerrada", "On: they alert you even when the app is closed", "An: du wirst auch bei geschlossener App benachrichtigt"],
+  ["Chats, grupos y negocios que te escriben", "Chats, groups and businesses that write to you", "Chats, Gruppen und Unternehmen, die dir schreiben"],
+  ["Avisos de Business", "Business alerts", "Business-Benachrichtigungen"],
+  ["Activados: clientes que escriben a {name}", "On: customers writing to {name}", "An: Kunden, die {name} schreiben"],
+  ["Mensajes de clientes en tu negocio (con 💼)", "Customer messages in your business (marked with 💼)", "Kundennachrichten in deinem Unternehmen (mit 💼)"],
+  ["Avisos de Business activados", "Business alerts on", "Business-Benachrichtigungen an"],
+  ["Avisos personales activados", "Personal alerts on", "Persönliche Benachrichtigungen an"],
 ];

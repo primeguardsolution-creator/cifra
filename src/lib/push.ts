@@ -54,6 +54,31 @@ export async function disablePush(): Promise<void> {
   await sub.unsubscribe().catch(() => {});
 }
 
+export type PushPrefs = { personal: boolean; business: boolean };
+
+async function currentEndpoint() {
+  const sub = await (await navigator.serviceWorker.getRegistration('/'))?.pushManager.getSubscription();
+  return sub?.endpoint ?? null;
+}
+
+/** Which spaces notify this device (Personal / Business). */
+export async function getPushPrefs(): Promise<PushPrefs> {
+  const none = { personal: true, business: true };
+  try {
+    const ep = await currentEndpoint();
+    if (!ep) return none;
+    const rows = await rpc<{ notify_personal: boolean; notify_business: boolean }[]>('get_push_prefs', { p_endpoint: ep });
+    const r = Array.isArray(rows) ? rows[0] : null;
+    return r ? { personal: r.notify_personal, business: r.notify_business } : none;
+  } catch { return none; }
+}
+
+export async function setPushPrefs(p: Partial<PushPrefs>): Promise<void> {
+  const ep = await currentEndpoint();
+  if (!ep) return;
+  await rpc<void>('set_push_prefs', { p_endpoint: ep, p_personal: p.personal ?? null, p_business: p.business ?? null });
+}
+
 /** On every start: if notifications were allowed, make sure this device is registered for the signed-in account (the phone may have switched accounts). */
 export async function syncPush(): Promise<void> {
   try {
