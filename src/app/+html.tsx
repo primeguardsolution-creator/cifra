@@ -13,9 +13,9 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="CIFRA" />
-        {/* The app paints the top safe area itself (every header pads by the inset), so the iOS status bar must be fully
-            transparent: "default" draws a dark frosted band over the first row of content in the installed PWA. */}
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        {/* "black": opaque status bar and the app starts below it. iOS draws its own dark gradient over whatever sits under a
+            translucent bar ("black-translucent" / "default"), which showed as a blurred shadow over the first rows. */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

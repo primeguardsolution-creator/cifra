@@ -83,7 +83,7 @@ export default function BusinessHub() {
             </View>
 
             <View style={{ borderRadius: r(28), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, overflow: 'hidden' }}>
-              <View style={{ height: 120, backgroundColor: '#101009' }}>
+              <View style={{ height: 120, backgroundColor: '#101009', zIndex: 2 }}>
                 {cover ? <Image source={{ uri: cover }} resizeMode="cover" style={{ width: '100%', height: '100%' }} /> : (
                   <>
                     <View style={{ position: 'absolute', left: -40, right: -40, bottom: 26, height: 18, backgroundColor: c.highlight, transform: [{ rotate: '-4deg' }] }} />
@@ -92,7 +92,7 @@ export default function BusinessHub() {
                 )}
                 {manage && <View style={{ position: 'absolute', right: 10, bottom: 10 }}><CoverPicker path={biz.cover_path} folder={`business/${biz.id}`} light onChange={(p) => save({ cover_path: p }, p ? 'Portada actualizada' : 'Portada eliminada')} /></View>}
               </View>
-              <View style={{ alignItems: 'center', gap: 6, padding: 20, paddingTop: 0, marginTop: -52 }}>
+              <View pointerEvents="box-none" style={{ alignItems: 'center', gap: 6, padding: 20, paddingTop: 0, marginTop: -52 }}>
                 <View style={{ padding: 4, borderRadius: 24, backgroundColor: c.surface }}>
                   {manage ? <PhotoPicker name={biz.name} seed={biz.id} path={biz.logo_path} folder={`business/${biz.id}`} business size={104} label="Cambiar logo" onChange={(p) => save({ logo_path: p }, p ? 'Logo actualizado' : 'Logo eliminado')} /> : <Avatar name={biz.name} seed={biz.id} path={biz.logo_path} size={104} business />}
                 </View>

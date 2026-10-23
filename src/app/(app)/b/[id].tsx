@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Linking, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PublicBusiness, StatusRow, deleteStatus, getPublicBusiness, listBusinessPosts, searchBusinesses, startBusinessChat } from '../../../lib/api';
+import { PublicBusiness, updateBusiness, StatusRow, deleteStatus, getPublicBusiness, listBusinessPosts, searchBusinesses, startBusinessChat } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
 import { money, relative } from '../../../lib/format';
 import { publicAvatarUrl, signedMediaUrl } from '../../../lib/media';
@@ -12,6 +12,8 @@ import { appUrl, shareText } from '../../../lib/share';
 import { useSpace } from '../../../state/SpaceProvider';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { ProfileHero } from '../../../components/ProfileHero';
+import { CoverPicker } from '../../../components/PhotoPicker';
+import { canManage } from '../../../lib/business';
 import { SlotPicker } from '../../../components/SlotPicker';
 import { requestAppointment } from '../../../lib/biz';
 import { Button, Card, ChatSkeleton, Divider, EmptyState, Field, Icon, IconButton, Pressy, Sheet, Txt, useToast } from '../../../ui';
@@ -63,6 +65,8 @@ export default function BusinessProfile() {
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const own = !!biz && businesses.some((b) => b.business.id === biz.id);
+  const canEdit = !!biz && canManage(businesses.find((b) => b.business.id === biz.id)?.role);
+  const saveCover = async (path: string | null) => { if (!biz) return; await updateBusiness(biz.id, { cover_path: path }); setBiz({ ...biz, cover_path: path }); };
   const message = async () => {
     if (!biz) return; setBusy(true);
     try { const cid = await startBusinessChat(biz.id); router.replace({ pathname: '/chat/[id]', params: { id: cid } }); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); }
@@ -83,6 +87,7 @@ export default function BusinessProfile() {
           <ProfileHero
             kind="business" name={biz.name} seed={biz.id} avatarPath={biz.logo_path} coverPath={biz.cover_path} accent={biz.accent} handle={biz.handle} tagline={biz.category} bio={biz.description}
             badges={[{ icon: 'storefront', label: 'Business', tone: 'warm' }, ...(biz.catalog.length ? [{ icon: 'pricetags' as const, label: t('{n} en catálogo', { n: biz.catalog.length }), tone: 'muted' as const }] : [])]}
+            bottomRight={canEdit ? <CoverPicker path={biz.cover_path} folder={`business/${biz.id}`} onChange={saveCover} light /> : undefined}
             topLeft={<IconButton icon="chevron-back" label="Volver" onPress={back} filled />}
             topRight={<IconButton icon="share-social" label="Compartir" filled onPress={async () => toast.show((await shareText(t('Escribe a {name} por CIFRA', { name: biz.name }), `${appUrl()}/b/${biz.handle ?? biz.id}`)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success')} />}
           />
