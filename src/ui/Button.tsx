@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, View, ViewStyle, StyleProp } from 'react-native';
+import { Glass } from './Glass';
 import { useTheme } from '../theme/ThemeProvider';
 import { radius } from '../theme/tokens';
 import { Icon, IconName } from './Icon';
@@ -39,7 +40,7 @@ export function Button({ title, onPress, variant = 'primary', icon, iconRight, l
   );
 }
 
-export function IconButton({ icon, onPress, label, tone = 'text', size = 40, filled, badge, wiggle, pop, haptic = true, disabled }: { icon: IconName; onPress?: () => void; label: string; tone?: 'text' | 'muted' | 'accent' | 'onAccent' | 'danger'; size?: number; filled?: boolean; badge?: boolean; wiggle?: boolean; pop?: boolean; haptic?: boolean; disabled?: boolean }) {
+export function IconButton({ icon, onPress, label, tone = 'text', size = 40, filled, glass, badge, wiggle, pop, haptic = true, disabled }: { icon: IconName; onPress?: () => void; label: string; tone?: 'text' | 'muted' | 'accent' | 'onAccent' | 'danger'; glass?: boolean; size?: number; filled?: boolean; badge?: boolean; wiggle?: boolean; pop?: boolean; haptic?: boolean; disabled?: boolean }) {
   const { c } = useTheme();
   const anim = useRef(new Animated.Value(0)).current;
   const native = Platform.OS !== 'web';
@@ -57,9 +58,10 @@ export function IconButton({ icon, onPress, label, tone = 'text', size = 40, fil
   };
   return (
     <Pressy accessibilityRole="button" accessibilityLabel={label} disabled={disabled} haptic={haptic} onPress={() => { play(); onPress?.(); }} scale={0.82} hoverStyle={{ backgroundColor: c.surfaceAlt }}
-      style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: filled ? c.accent : 'transparent', opacity: disabled ? 0.4 : 1 }}>
+      style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: glass ? 'transparent' : filled ? c.accent : 'transparent', opacity: disabled ? 0.4 : 1, overflow: glass ? 'hidden' : 'visible' }}>
+      {glass && <Glass radius={size / 2} tint="dark" style={{ position: 'absolute', inset: 0 } as object} />}
       <Animated.View style={{ transform: [wiggle ? { rotate: anim.interpolate({ inputRange: [-1, 1], outputRange: ['-18deg', '18deg'] }) } : { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] }) }] }}>
-        <Icon name={icon} size={size * 0.52} tone={filled ? 'onAccent' : tone} />
+        <Icon name={icon} size={size * 0.52} {...(glass ? { color: '#fff' } : { tone: filled ? ('onAccent' as const) : tone })} />
       </Animated.View>
       {badge && <View style={{ position: 'absolute', top: size * 0.18, right: size * 0.2, width: 9, height: 9, borderRadius: 5, backgroundColor: c.highlight, borderWidth: 2, borderColor: c.bg }} />}
     </Pressy>

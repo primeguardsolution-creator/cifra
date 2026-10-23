@@ -7,3 +7,4 @@ export * from './Field';
 export * from './Sheet';
 export * from './Toast';
 export * from './Bits';
+export * from './Glass';
