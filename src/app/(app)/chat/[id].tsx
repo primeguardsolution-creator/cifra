@@ -212,7 +212,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
         // Team view: everything sent by the business side (any agent, or the automations) sits on the right; only the customer is on the left.
         const businessSide = agent && m.sender_id !== chat?.peer_id;
         const mine = agent ? businessSide : m.sender_id === me;
-        const author = agent ? (businessSide && m.sender_id !== me && !m.is_automated ? nameOf(m.sender_id) : undefined) : chat?.kind === 'group' && !mine ? nameOf(m.sender_id) : undefined;
+        const author = agent ? (businessSide && m.sender_id !== me && !m.is_automated ? nameOf(m.sender_id) : undefined) : chat?.kind === 'group' && !mine ? nameOf(m.sender_id) : chat?.kind === 'business' && !mine ? (m.is_automated ? chat.business_name ?? undefined : [nameOf(m.sender_id), chat.business_name].filter(Boolean).join(' · ')) : undefined;
         const target = m.reply_to_id ? byId.get(m.reply_to_id) ?? null : undefined;
         const readable = !!conv.othersReadAt && conv.othersReadAt >= m.created_at;
         const delivered = readable || (!!conv.othersDeliveredAt && conv.othersDeliveredAt >= m.created_at);
