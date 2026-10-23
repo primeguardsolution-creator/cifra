@@ -118,7 +118,7 @@ export default function Doer() {
             style={{ color: c.text, fontFamily: font.regular, fontSize: 16, lineHeight: 22, paddingVertical: 0, marginVertical: 11, outlineStyle: 'none' } as object} />
         </View>
         <Pressy onPress={() => send(text)} disabled={!canSend} accessibilityRole="button" accessibilityLabel="Enviar a Doer" scale={0.92} style={{ width: 46, height: 46, borderRadius: r(10), backgroundColor: canSend ? c.highlight : c.sunken, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="arrow-up" size={22} color={canSend ? '#16160F' : c.textFaint} />
+          <Icon name="arrow-up" size={22} color={canSend ? c.highlightText : c.textFaint} />
         </Pressy>
       </View>
     </View>
@@ -132,7 +132,7 @@ function Row({ from, children }: { from: 'me' | 'doer'; children: React.ReactNod
   return (
     <View style={{ flexDirection: 'row', gap: 11, paddingHorizontal: 16, paddingVertical: 8 }}>
       {from === 'doer'
-        ? <View style={{ width: 36, height: 36, borderRadius: r(10), backgroundColor: c.highlight, alignItems: 'center', justifyContent: 'center' }}><Icon name="flash" size={19} color="#16160F" /></View>
+        ? <View style={{ width: 36, height: 36, borderRadius: r(10), backgroundColor: c.highlight, alignItems: 'center', justifyContent: 'center' }}><Icon name="flash" size={19} color={c.highlightText} /></View>
         : <View style={{ width: 36, height: 36, borderRadius: r(10), backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}><Txt style={{ color: c.accentText, fontFamily: font.display, fontSize: 15 }}>{(profile?.display_name ?? 'Tú').slice(0, 1).toUpperCase()}</Txt></View>}
       <View style={{ flex: 1, gap: 3 }}>
         <Txt v="smallStrong" style={{ fontFamily: font.display }}>{from === 'doer' ? 'Doer' : profile?.display_name ?? 'Tú'}</Txt>

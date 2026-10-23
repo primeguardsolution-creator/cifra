@@ -27,9 +27,9 @@ export const navItems: Record<Space, Item[]> = {
     { href: '/more', label: 'Más', icon: 'grid-outline', iconOn: 'grid' },
   ],
 };
-export const topLevel = ['/chats', '/updates', '/calls', '/contacts', '/settings', '/inbox', '/catalog', '/business', '/agenda', '/clients', '/doer', '/more'];
+export const topLevel = ['/chats', '/updates', '/calls', '/contacts', '/settings', '/inbox', '/catalog', '/business', '/agenda', '/clients', '/doer', '/more', '/posts'];
 /** Screens that live under the Business "Más" tab. */
-export const moreRoutes = ['/more', '/catalog', '/business', '/settings'];
+export const moreRoutes = ['/more', '/catalog', '/business', '/settings', '/posts'];
 
 function useBadge(kind?: 'chats' | 'inbox' | 'calls') {
   const { unread, missedCalls } = useChats();

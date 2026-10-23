@@ -9,6 +9,7 @@ export default function More() {
   const { c, r } = useTheme();
   const { active, switchSpace } = useSpace();
   const rows: { icon: IconName; title: string; sub: string; go: string }[] = [
+    { icon: 'aperture', title: 'Publicaciones', sub: 'Novedades, fotos y vídeos que ven tus clientes · 7 días', go: '/posts' },
     { icon: 'pricetags', title: 'Catálogo', sub: 'Productos y servicios que ven tus clientes', go: '/catalog' },
     { icon: 'storefront', title: 'Perfil, equipo y automatizaciones', sub: 'Saludo, ausencia, respuestas rápidas, roles', go: '/business' },
     ...(active ? [{ icon: 'eye' as IconName, title: 'Mi perfil público', sub: 'Así te ven los clientes · compartir enlace', go: `/b/${active.business.id}` }] : []),

@@ -2,14 +2,13 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
 import { BizHeader, Key, NoBusiness, Pill } from '../../components/BizUi';
-import { Customer, Stage, Task, addCustomer, addDays, addTask, crmSync, deleteCustomer, deleteTask, listCustomers, listTasks, setTaskDone, stages, startOfDay, updateCustomer } from '../../lib/biz';
+import { Customer, Stage, Task, addCustomer, addDays, addTask, crmSync, deleteCustomer, deleteTask, listCustomers, listTasks, setTaskDone, stages, startCustomerChat, startOfDay, updateCustomer } from '../../lib/biz';
 import { friendly } from '../../lib/errors';
 import { WIDE } from '../../lib/layout';
 import { useChats } from '../../state/ChatsProvider';
 import { useSpace } from '../../state/SpaceProvider';
 import { useTheme } from '../../theme/ThemeProvider';
-import { font } from '../../theme/tokens';
-import { Avatar, Button, Chip, Field, Icon, IconName, Pressy, Sheet, Txt, useToast } from '../../ui';
+import { Avatar, Button, Chip, Field, Icon, IconButton, IconName, Pressy, Sheet, Txt, useToast } from '../../ui';
 import { loc, t as T, tr } from '../../i18n';
 
 const ago = (iso: string | null) => {
@@ -33,6 +32,7 @@ export default function Clients() {
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [taskText, setTaskText] = useState('');
+  const [writing, setWriting] = useState<string | null>(null);
   const bid = active?.business.id;
   const canWrite = active?.role !== 'viewer';
 
@@ -53,13 +53,29 @@ export default function Clients() {
   };
   const chatFor = (cu: Customer) => chats.find((ch) => ch.peer_id && ch.peer_id === cu.user_id);
   const openTasks = tasks.filter((t) => !t.done);
+  /** "Escribir": opens the existing business chat or creates it (also when only the phone was known and that number is on CIFRA). */
+  const write = async (cu: Customer) => {
+    const existing = chatFor(cu);
+    if (existing) { setSel(null); router.push({ pathname: '/chat/[id]', params: { id: existing.id } }); return; }
+    if (!canWrite) return toast.show('Tu rol es de solo lectura en este negocio.', 'info');
+    setWriting(cu.id);
+    try {
+      const id = await startCustomerChat(cu.id);
+      setSel(null); load(); // the card may now be linked to the account
+      router.push({ pathname: '/chat/[id]', params: { id } });
+    } catch (e) {
+      const msg = String((e as Error).message);
+      toast.show(/customer_not_on_cifra/.test(msg) ? T('{name} aún no está en CIFRA con ese número. Invítale y podrás escribirle.', { name: cu.name }) : /customer_is_team/.test(msg) ? 'Esa persona es de tu equipo: escríbele desde tu espacio Personal.' : friendly(e, 'No se pudo abrir el chat.'), 'error');
+    } finally { setWriting(null); }
+  };
+  const canChat = (cu: Customer) => !!cu.user_id || !!cu.phone?.trim();
 
   const card = (cu: Customer) => (
     <Pressy key={cu.id} onPress={() => setSel(cu)} accessibilityRole="button" scale={0.98} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ padding: 11, gap: 7, borderRadius: r(10), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
         <Avatar name={cu.name} seed={cu.id} size={30} />
         <View style={{ flex: 1 }}><Txt v="smallStrong" numberOfLines={1}>{cu.name}</Txt><Txt v="caption" tone="faint">{ago(cu.last_contact_at)}</Txt></View>
-        {cu.user_id && <Icon name="chatbubble-ellipses" size={14} color={c.highlight} />}
+        {canChat(cu) && <IconButton icon={cu.user_id ? 'chatbubble-ellipses' : 'chatbubble-outline'} label={T('Escribir a {name}', { name: cu.name })} tone="accent" size={30} pop disabled={writing === cu.id} onPress={() => write(cu)} />}
       </View>
       {(cu.tags.length > 0 || cu.value_minor) ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
@@ -95,6 +111,7 @@ export default function Clients() {
           <Avatar name={cu.name} seed={cu.id} size={40} />
           <View style={{ flex: 1 }}><Txt v="bodyStrong" numberOfLines={1}>{cu.name}</Txt><Txt v="caption" tone="muted" numberOfLines={1}>{[cu.phone, cu.email].filter(Boolean).join(' · ') || ago(cu.last_contact_at)}</Txt></View>
           <Pill label={stages.find((s) => s.key === cu.stage)!.label} color={stages.find((s) => s.key === cu.stage)!.color} />
+          {canChat(cu) && <IconButton icon="chatbubble-ellipses-outline" label={T('Escribir a {name}', { name: cu.name })} tone="accent" size={36} pop disabled={writing === cu.id} onPress={() => write(cu)} />}
         </Pressy>
       ))}
     </View>
@@ -149,8 +166,8 @@ export default function Clients() {
             <DraftField key={`v-${sel.id}`} label="Valor estimado (€)" initial={sel.value_minor != null ? String(sel.value_minor / 100) : ''} editable={canWrite} keyboardType="decimal-pad" placeholder="0" onCommit={(t) => { const n = parseFloat(t.replace(',', '.')); patch(sel, { value_minor: Number.isFinite(n) ? Math.round(n * 100) : null }); }} />
             <DraftField key={`n-${sel.id}`} label="Notas privadas" initial={sel.notes ?? ''} editable={canWrite} multiline placeholder="Preferencias, acuerdos, lo que no quieras olvidar" maxLength={1000} onCommit={(t) => patch(sel, { notes: t.trim() || null })} />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {chatFor(sel) && <Key primary icon="chatbubble" label="Abrir chat" onPress={() => { const id = chatFor(sel)!.id; setSel(null); router.push({ pathname: '/chat/[id]', params: { id } }); }} />}
-              <Key icon="calendar" label="Agendar cita" onPress={() => { setSel(null); router.push('/agenda'); }} />
+              {canChat(sel) ? <Key primary icon="chatbubble" label={chatFor(sel) ? 'Abrir chat' : 'Escribir'} onPress={() => write(sel)} /> : <Txt v="caption" tone="faint" style={{ alignSelf: 'center' }}>Añade su teléfono para poder escribirle</Txt>}
+              <Key icon="calendar" label="Agendar cita" onPress={() => { setSel(null); router.push({ pathname: '/agenda', params: { customer: sel.id } }); }} />
               {canWrite && <Key icon="checkbox" label="Tarea" onPress={async () => { try { const t = await addTask(bid!, { title: T('Seguimiento: {name}', { name: sel.name }), customer_id: sel.id, due_at: addDays(startOfDay(new Date()), 2).toISOString() }); setTasks((cur) => [t, ...cur]); toast.show('Tarea creada para dentro de 2 días', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />}
               {active.role !== 'agent' && active.role !== 'viewer' && <Key icon="trash" label="Eliminar" onPress={async () => { const id = sel.id; setSel(null); try { await deleteCustomer(id); setRows((cur) => cur?.filter((x) => x.id !== id) ?? cur); } catch (e) { toast.show(friendly(e), 'error'); } }} />}
             </View>

@@ -16,6 +16,7 @@ import { ChatRow, chatTitle, previewText } from './ChatRow';
 import { SpaceSwitch } from './SpaceSwitch';
 import { AssistantRow, assistantMatches } from '../features/assistant/AssistantRow';
 import { useAssistantState } from '../features/assistant/store';
+import { InvitationsBanner } from '../features/agenda/Invitations';
 import { t } from '../i18n';
 
 type Filter = 'all' | 'unread' | 'groups' | 'mine' | 'unassigned' | 'open' | 'pending' | 'resolved' | 'archived';
@@ -141,7 +142,7 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
       <FlatList
         data={body ? [] : visible}
         keyExtractor={(x) => x.id}
-        ListHeaderComponent={<>{header}{atRow}{botRow}</>}
+        ListHeaderComponent={<>{header}{!business && filter === 'all' && !q && <InvitationsBanner />}{atRow}{botRow}</>}
         ListEmptyComponent={body}
         renderItem={({ item }) => <ChatRow chat={item} selected={item.id === selectedId} showState={business} onMenu={business ? undefined : setMenuFor} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} />}

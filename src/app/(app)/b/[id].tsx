@@ -2,28 +2,47 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Linking, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PublicBusiness, getPublicBusiness, searchBusinesses, startBusinessChat } from '../../../lib/api';
+import { PublicBusiness, StatusRow, deleteStatus, getPublicBusiness, listBusinessPosts, searchBusinesses, startBusinessChat } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
-import { money } from '../../../lib/format';
-import { publicAvatarUrl } from '../../../lib/media';
+import { money, relative } from '../../../lib/format';
+import { publicAvatarUrl, signedMediaUrl } from '../../../lib/media';
+import { StatusViewer } from '../../../features/status/StatusViewer';
+import { statusBackgrounds } from '../../../theme/tokens';
 import { appUrl, shareText } from '../../../lib/share';
 import { useSpace } from '../../../state/SpaceProvider';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { ProfileHero } from '../../../components/ProfileHero';
 import { SlotPicker } from '../../../components/SlotPicker';
 import { requestAppointment } from '../../../lib/biz';
-import { Button, Card, ChatSkeleton, Divider, EmptyState, Field, Icon, IconButton, Sheet, Txt, useToast } from '../../../ui';
+import { Button, Card, ChatSkeleton, Divider, EmptyState, Field, Icon, IconButton, Pressy, Sheet, Txt, useToast } from '../../../ui';
 import { loc, t } from '../../../i18n';
 
 const isUuid = (s: string) => /^[0-9a-f-]{36}$/i.test(s);
 
+/** Small tile of a business post for the "Novedades" strip on the public profile. */
+function PostThumb({ s, onPress }: { s: StatusRow; onPress: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => { let live = true; if (s.kind === 'image' && s.media_path) signedMediaUrl(s.media_path).then((u) => live && setUrl(u)); return () => { live = false; }; }, [s.media_path, s.kind]);
+  const bg = statusBackgrounds[s.bg % statusBackgrounds.length][1];
+  return (
+    <Pressy onPress={onPress} accessibilityRole="button" accessibilityLabel={s.body ?? (s.kind === 'video' ? 'Vídeo' : 'Foto')} scale={0.96} style={{ width: 104, height: 140, borderRadius: 16, overflow: 'hidden', backgroundColor: s.kind === 'text' ? bg : '#0A0A08', alignItems: 'center', justifyContent: 'center', padding: 8 }}>
+      {s.kind === 'image' && url ? <Image source={{ uri: url }} resizeMode="cover" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' } as object} /> : null}
+      {s.kind === 'text' && <Txt v="caption" numberOfLines={5} style={{ color: '#fff', textAlign: 'center' }}>{s.body}</Txt>}
+      {s.kind === 'video' && <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}><Icon name="play" size={18} color="#fff" /></View>}
+      <View style={{ position: 'absolute', left: 6, bottom: 6, paddingHorizontal: 6, height: 18, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center' }}><Txt style={{ color: '#fff', fontSize: 10, lineHeight: 12 }}>{relative(s.created_at)}</Txt></View>
+    </Pressy>
+  );
+}
+
 export default function BusinessProfile() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, chat } = useLocalSearchParams<{ id: string; chat?: string }>();
   const { c } = useTheme();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const { businesses } = useSpace();
   const [biz, setBiz] = useState<PublicBusiness | null | undefined>(undefined);
+  const [posts, setPosts] = useState<StatusRow[]>([]);
+  const [viewing, setViewing] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [reqOpen, setReqOpen] = useState(false);
   const [slot, setSlot] = useState<Date | null>(null);
@@ -37,6 +56,7 @@ export default function BusinessProfile() {
         if (!isUuid(id)) { const hit = (await searchBusinesses(id)).find((b) => b.handle === id.toLowerCase()); bid = hit?.id ?? ''; }
         const data = bid ? await getPublicBusiness(bid) : null;
         if (live) setBiz(data);
+        if (bid) listBusinessPosts([bid]).then((p) => live && setPosts(p)).catch(() => {});
       } catch (e) { if (live) { setBiz(null); toast.show(friendly(e), 'error'); } }
     })();
     return () => { live = false; };
@@ -47,6 +67,8 @@ export default function BusinessProfile() {
     if (!biz) return; setBusy(true);
     try { const cid = await startBusinessChat(biz.id); router.replace({ pathname: '/chat/[id]', params: { id: cid } }); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); }
   };
+  // "Escribir" from a post in the viewer lands here with ?chat=1: go straight to the conversation.
+  useEffect(() => { if (chat === '1' && biz && !own) message(); }, [chat, biz?.id, own]); // eslint-disable-line react-hooks/exhaustive-deps
   const sendRequest = async () => {
     if (!biz || !slot) return; setBusy(true);
     try { await requestAppointment(biz.id, slot, note); setReqOpen(false); toast.show('Cita solicitada. Te avisarán por el chat.', 'success'); const cid = await startBusinessChat(biz.id); router.replace({ pathname: '/chat/[id]', params: { id: cid } }); }
@@ -59,7 +81,7 @@ export default function BusinessProfile() {
       <ScrollView contentContainerStyle={{ alignItems: 'center', paddingBottom: 50 }}>
         {biz ? (
           <ProfileHero
-            kind="business" name={biz.name} seed={biz.id} avatarPath={biz.logo_path} handle={biz.handle} tagline={biz.category} bio={biz.description}
+            kind="business" name={biz.name} seed={biz.id} avatarPath={biz.logo_path} coverPath={biz.cover_path} accent={biz.accent} handle={biz.handle} tagline={biz.category} bio={biz.description}
             badges={[{ icon: 'storefront', label: 'Business', tone: 'warm' }, ...(biz.catalog.length ? [{ icon: 'pricetags' as const, label: t('{n} en catálogo', { n: biz.catalog.length }), tone: 'muted' as const }] : [])]}
             topLeft={<IconButton icon="chevron-back" label="Volver" onPress={back} filled />}
             topRight={<IconButton icon="share-social" label="Compartir" filled onPress={async () => toast.show((await shareText(t('Escribe a {name} por CIFRA', { name: biz.name }), `${appUrl()}/b/${biz.handle ?? biz.id}`)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success')} />}
@@ -72,6 +94,15 @@ export default function BusinessProfile() {
                 <View style={{ gap: 10 }}>
                   <Button title="Enviar mensaje" size="lg" icon="chatbubble" loading={busy} onPress={message} />
                   <Button title="Solicitar una cita" variant="secondary" icon="calendar" onPress={() => { setSlot(null); setReqOpen(true); }} />
+                </View>
+              )}
+
+              {posts.length > 0 && (
+                <View style={{ gap: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Txt v="h2" style={{ flex: 1 }}>Novedades</Txt><Txt v="caption" tone="muted">{posts.length === 1 ? '1 publicación' : t('{n} publicaciones', { n: posts.length })}</Txt></View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                    {posts.map((s, i) => <PostThumb key={s.id} s={s} onPress={() => setViewing(i)} />)}
+                  </ScrollView>
                 </View>
               )}
 
@@ -108,6 +139,8 @@ export default function BusinessProfile() {
           )}
         </View>
       </ScrollView>
+      {biz && <StatusViewer visible={viewing !== null && posts.length > 0} items={viewing === null ? [] : [...posts.slice(viewing), ...posts.slice(0, viewing)]} name={biz.name} avatarPath={biz.logo_path} seed={biz.id} mine={own} business={{ id: biz.id, handle: biz.handle }} onClose={() => setViewing(null)}
+        onDelete={own ? async (s) => { try { await deleteStatus(s.id); setPosts((p) => p.filter((x) => x.id !== s.id)); } catch (e) { toast.show(friendly(e), 'error'); } } : undefined} />}
       <Sheet visible={reqOpen} onClose={() => setReqOpen(false)} title="Solicitar una cita">
         <Txt v="small" tone="muted" style={{ marginBottom: 10 }}>Elige el día y la hora que prefieras. {biz?.name} la confirmará por el chat.</Txt>
         <SlotPicker value={slot} onChange={setSlot} />

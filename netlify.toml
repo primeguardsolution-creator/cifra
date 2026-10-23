@@ -1,6 +1,6 @@
 [build]
   publish = "dist"
-  command = "npx expo export --platform web"
+  command = "sh scripts/build-web.sh"
 
 [[redirects]]
   from = "/api/ice"
@@ -11,6 +11,12 @@
 [[redirects]]
   from = "/api/assistant"
   to = "/.netlify/functions/assistant"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/release"
+  to = "/.netlify/functions/release"
   status = 200
   force = true
 
@@ -45,5 +51,10 @@
 
 [[headers]]
   for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/version.json"
   [headers.values]
     Cache-Control = "no-cache"

@@ -5,14 +5,20 @@ import { supabase } from './supabase';
 export type ConversationState = 'open' | 'pending' | 'resolved' | 'closed';
 export type BusinessRole = 'owner' | 'admin' | 'supervisor' | 'agent' | 'viewer';
 
-export type Profile = { id: string; display_name: string; username: string | null; bio: string | null; avatar_path: string | null; phone: string | null; phone_verified: boolean; discoverable: boolean; hide_phone: boolean };
-export type PersonCard = { id: string; display_name: string; avatar_path: string | null; phone: string | null; bio?: string | null; username?: string | null; created_at?: string | null };
+export type Profile = { id: string; display_name: string; username: string | null; bio: string | null; avatar_path: string | null; cover_path: string | null; phone: string | null; phone_verified: boolean; discoverable: boolean; hide_phone: boolean };
+export type PersonCard = { id: string; display_name: string; avatar_path: string | null; phone: string | null; bio?: string | null; username?: string | null; created_at?: string | null; cover_path?: string | null };
+/** Result of the @username search: never carries a phone number. */
+export type UserHit = { id: string; display_name: string; username: string; avatar_path: string | null; is_self: boolean; is_contact: boolean };
 
 export type Chat = {
   id: string; kind: 'direct' | 'group' | 'business'; title: string | null; state: ConversationState; business_id: string | null; assigned_to: string | null;
   perspective: 'personal' | 'agent'; created_at: string; peer_id: string | null; peer_name: string | null; peer_avatar: string | null; peer_phone: string | null;
   business_name: string | null; business_handle: string | null; member_count: number; last_message_id: string | null; last_body: string | null; last_sender: string | null;
   last_attachment_type: string | null; last_deleted: boolean | null; last_internal: boolean | null; last_at: string | null; unread: number; muted_until: string | null; pinned_at: string | null; archived: boolean; marked_unread: boolean;
+  /** Incognito rooms: named, self-destructing after 3 h of silence (`expires_at`) or when both sides ask (`destroy_*`). */
+  incognito: boolean; expires_at: string | null; destroy_mine: boolean; destroy_peer: boolean;
+  /** Receipts for the last message when I sent it: delivered to the other device / read by them. */
+  last_delivered: boolean; last_read: boolean;
 };
 
 export type Message = {
@@ -22,16 +28,19 @@ export type Message = {
 };
 export type Reaction = { message_id: string; user_id: string; emoji: string };
 
+export type BizAccent = 'amber' | 'cobalt' | 'jade' | 'ruby' | 'orchid';
 export type Business = {
   id: string; name: string; handle: string | null; description: string | null; category: string | null; email: string | null; phone: string | null; website: string | null;
-  address: string | null; logo_path: string | null; greeting: string | null; away_message: string | null; away_enabled: boolean; is_public: boolean; owner_id: string; show_phone: boolean;
+  address: string | null; logo_path: string | null; cover_path: string | null; accent: BizAccent; greeting: string | null; away_message: string | null; away_enabled: boolean; is_public: boolean; owner_id: string; show_phone: boolean;
 };
 export type BusinessMembership = { role: BusinessRole; business: Business };
 export type TeamMember = { user_id: string; role: BusinessRole; display_name: string; avatar_path: string | null; phone: string | null; joined_at: string };
 export type CatalogItem = { id: string; business_id: string; name: string; description: string | null; price_minor: number | null; currency: string | null; image_path: string | null; is_published: boolean };
 export type QuickReply = { id: string; business_id: string; shortcut: string; body: string };
 export type ContactRow = { id: string; display_name: string; phone: string | null; contact_user_id: string | null };
-export type StatusRow = { id: string; user_id: string; kind: 'text' | 'image'; body: string | null; bg: number; media_path: string | null; created_at: string; expires_at: string };
+export type StatusKind = 'text' | 'image' | 'video';
+/** A status (24 h, personal) or a business post (`business_id` set, up to 7 days, public feed). */
+export type StatusRow = { id: string; user_id: string; kind: StatusKind; body: string | null; bg: number; media_path: string | null; created_at: string; expires_at: string; business_id: string | null };
 
 // ───────── Helpers ─────────
 export type PgError = { message: string } | null;
@@ -44,11 +53,11 @@ export async function rpc<T>(fn: string, args?: Record<string, unknown>): Promis
 }
 
 // ───────── Profile ─────────
-const profileCols = 'id, display_name, username, bio, avatar_path, phone, phone_verified, discoverable, hide_phone';
+const profileCols = 'id, display_name, username, bio, avatar_path, cover_path, phone, phone_verified, discoverable, hide_phone';
 export async function getMyProfile(userId: string): Promise<Profile> {
   return unwrap(await supabase.from('profiles').select(profileCols).eq('id', userId).single());
 }
-export async function updateMyProfile(userId: string, v: Partial<Pick<Profile, 'display_name' | 'username' | 'bio' | 'avatar_path' | 'discoverable' | 'hide_phone'>>): Promise<Profile> {
+export async function updateMyProfile(userId: string, v: Partial<Pick<Profile, 'display_name' | 'username' | 'bio' | 'avatar_path' | 'cover_path' | 'discoverable' | 'hide_phone'>>): Promise<Profile> {
   const patch: Record<string, unknown> = { ...v };
   if ('username' in v) patch.username = v.username?.trim().replace(/^@/, '').toLowerCase() || null;
   if ('display_name' in v) patch.display_name = v.display_name?.trim();
@@ -58,6 +67,8 @@ export async function updateMyProfile(userId: string, v: Partial<Pick<Profile, '
 export const getProfiles = (ids: string[]) => (ids.length ? rpc<PersonCard[]>('get_profiles', { p_ids: ids }) : Promise.resolve([]));
 export const findUserByUsername = (u: string) => rpc<(PersonCard & { is_self: boolean })[]>('find_user_by_username', { p_username: u });
 export const findUserByPhone = (phone: string) => rpc<(PersonCard & { is_self: boolean })[]>('find_user_by_phone', { p_phone: phone });
+/** Prefix search by @username (up to 8 accounts). Finds anyone with a username, contact or not. */
+export const searchUsers = (q: string) => rpc<UserHit[]>('search_users', { p_query: q });
 
 // ───────── Chats ─────────
 export const listChats = (businessId?: string | null) => rpc<Chat[]>('list_chats', { p_business: businessId ?? null, p_conv: null });
@@ -66,9 +77,16 @@ export async function getChat(id: string): Promise<Chat | null> {
   return rows[0] ?? null;
 }
 export const startDirectChat = (userId: string) => rpc<string>('start_direct_chat', { p_other: userId });
+/** A named incognito room with one person. It self-destructs after 3 h without messages, or at once when both ask. */
+export const startIncognitoChat = (userId: string, title: string) => rpc<string>('start_incognito_chat', { p_other: userId, p_title: title });
+/** Asks to destroy an incognito room now (or withdraws the request). Resolves `true` when the room is gone. */
+export const requestIncognitoDestroy = (conv: string, cancel = false) => rpc<boolean>('request_incognito_destroy', { p_conv: conv, p_cancel: cancel });
+export const INCOGNITO_TTL_MS = 3 * 3600e3;
 export const createGroup = (title: string, members: string[]) => rpc<string>('create_group', { p_title: title, p_members: members });
 export const leaveConversation = (id: string) => rpc<void>('leave_conversation', { p_conv: id });
 export const markRead = (id: string) => rpc<void>('mark_read', { p_conv: id });
+/** "It reached my device": called whenever messages are fetched or received, so the sender sees two ticks. */
+export const markDelivered = (conv?: string | null) => rpc<number>('mark_delivered', { p_conv: conv ?? null });
 export const updateBusinessConversation = (id: string, v: { state?: ConversationState; assigned?: string | null }) =>
   rpc<void>('update_business_conversation', { p_conv: id, p_state: v.state ?? null, p_assigned: v.assigned ?? null, p_unassign: v.assigned === null });
 
@@ -104,8 +122,9 @@ export async function setReaction(messageId: string, userId: string, emoji: stri
   if (!emoji) return unwrap(await supabase.from('message_reactions').delete().eq('message_id', messageId).eq('user_id', userId));
   return unwrap(await supabase.from('message_reactions').upsert({ message_id: messageId, user_id: userId, emoji }));
 }
-export async function fetchMemberReads(conversationId: string): Promise<{ user_id: string; last_read_at: string | null }[]> {
-  return unwrap(await supabase.from('conversation_members').select('user_id, last_read_at').eq('conversation_id', conversationId));
+export type MemberReceipt = { user_id: string; last_read_at: string | null; last_delivered_at: string | null };
+export async function fetchMemberReads(conversationId: string): Promise<MemberReceipt[]> {
+  return unwrap(await supabase.from('conversation_members').select('user_id, last_read_at, last_delivered_at').eq('conversation_id', conversationId));
 }
 
 // ───────── Contacts & blocks ─────────
@@ -121,16 +140,28 @@ export async function listBlocked(): Promise<string[]> {
 }
 export const blockUser = async (me: string, other: string) => unwrap(await supabase.from('user_blocks').upsert({ blocker_id: me, blocked_id: other }));
 export const unblockUser = async (me: string, other: string) => unwrap(await supabase.from('user_blocks').delete().eq('blocker_id', me).eq('blocked_id', other));
+/** Reports an unknown contact (or a business) that wrote to you. Only you can read your own reports. */
+export const reportUser = async (me: string, r: { reported_id?: string | null; business_id?: string | null; conversation_id?: string | null; reason: string }) =>
+  unwrap(await supabase.from('reports').insert({ reporter_id: me, reported_id: r.reported_id ?? null, business_id: r.business_id ?? null, conversation_id: r.conversation_id ?? null, reason: r.reason.trim().slice(0, 500) }));
 
-// ───────── Statuses ─────────
+// ───────── Statuses & business posts ─────────
+const statusCols = 'id, user_id, kind, body, bg, media_path, created_at, expires_at, business_id';
+/** Personal statuses of you and your contacts (24 h). */
 export async function listStatuses(): Promise<StatusRow[]> {
-  return unwrap(await supabase.from('statuses').select('id, user_id, kind, body, bg, media_path, created_at, expires_at').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: true }));
+  return unwrap(await supabase.from('statuses').select(statusCols).is('business_id', null).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: true }));
 }
-export const postStatus = async (me: string, s: { kind: 'text' | 'image'; body?: string; bg?: number; media_path?: string }) => unwrap(await supabase.from('statuses').insert({ user_id: me, ...s }));
+/** Posts of the given businesses (up to 7 days): the feed of the businesses you follow / chat with, or one business page. */
+export async function listBusinessPosts(businessIds: string[]): Promise<StatusRow[]> {
+  if (!businessIds.length) return [];
+  return unwrap(await supabase.from('statuses').select(statusCols).in('business_id', businessIds).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(200));
+}
+export const BUSINESS_POST_DAYS = 7;
+export const postStatus = async (me: string, s: { kind: StatusKind; body?: string; bg?: number; media_path?: string; business_id?: string | null }) =>
+  unwrap(await supabase.from('statuses').insert({ user_id: me, ...s, ...(s.business_id ? { expires_at: new Date(Date.now() + BUSINESS_POST_DAYS * 864e5).toISOString() } : {}) }));
 export const deleteStatus = async (id: string) => unwrap(await supabase.from('statuses').delete().eq('id', id));
 
 // ───────── Business ─────────
-const businessCols = 'id, name, handle, description, category, email, phone, website, address, logo_path, greeting, away_message, away_enabled, is_public, owner_id, show_phone';
+const businessCols = 'id, name, handle, description, category, email, phone, website, address, logo_path, cover_path, accent, greeting, away_message, away_enabled, is_public, owner_id, show_phone';
 export async function myBusinesses(): Promise<BusinessMembership[]> {
   const rows = unwrap<{ role: BusinessRole; business: Business | Business[] }[]>(await supabase.from('business_members').select(`role, business:businesses(${businessCols})`));
   return rows.map((r) => ({ role: r.role, business: Array.isArray(r.business) ? r.business[0] : r.business })).filter((r) => r.business);
@@ -160,7 +191,7 @@ export async function saveCatalogItem(item: Partial<CatalogItem> & { business_id
 }
 export const deleteCatalogItem = async (id: string) => unwrap(await supabase.from('catalog_items').delete().eq('id', id));
 
-export type PublicBusiness = Pick<Business, 'id' | 'name' | 'handle' | 'category' | 'description' | 'phone' | 'email' | 'website' | 'address' | 'logo_path'> & { show_phone?: boolean; catalog: Pick<CatalogItem, 'id' | 'name' | 'description' | 'price_minor' | 'currency' | 'image_path'>[] };
+export type PublicBusiness = Pick<Business, 'id' | 'name' | 'handle' | 'category' | 'description' | 'phone' | 'email' | 'website' | 'address' | 'logo_path'> & { cover_path?: string | null; accent?: BizAccent | null; show_phone?: boolean; catalog: Pick<CatalogItem, 'id' | 'name' | 'description' | 'price_minor' | 'currency' | 'image_path'>[] };
 export const searchBusinesses = (q: string) => rpc<Pick<Business, 'id' | 'name' | 'handle' | 'category' | 'description' | 'logo_path'>[]>('search_businesses', { p_query: q });
 export const getPublicBusiness = (id: string) => rpc<PublicBusiness | null>('get_business_public', { p_id: id });
 export const startBusinessChat = (businessId: string) => rpc<string>('start_business_chat', { p_business: businessId });

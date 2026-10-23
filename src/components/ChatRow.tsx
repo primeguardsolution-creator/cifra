@@ -20,6 +20,15 @@ export function chatTitle(c: Chat) {
   return c.peer_name || c.title || (c.peer_phone ? formatPhone(c.peer_phone) : 'Conversación');
 }
 
+/** "2 h 41 min" left before an incognito room self-destructs (null when it has no timer). */
+export function incognitoLeft(c: Pick<Chat, 'incognito' | 'expires_at'>): string | null {
+  if (!c.incognito || !c.expires_at) return null;
+  const ms = new Date(c.expires_at).getTime() - Date.now();
+  if (ms <= 0) return tr('caducado');
+  const h = Math.floor(ms / 3600e3); const m = Math.max(1, Math.floor((ms % 3600e3) / 60e3));
+  return h > 0 ? t('{h} h {m} min', { h, m }) : t('{m} min', { m });
+}
+
 export function previewText(c: Chat, me?: string) {
   if (c.last_message_id == null) return tr(c.kind === 'business' && c.perspective === 'personal' ? 'Escribe tu primer mensaje' : 'Di hola 👋');
   if (c.last_deleted) return tr('Mensaje eliminado');
@@ -48,15 +57,17 @@ export function ChatRow({ chat, selected, showState, onMenu, typing }: { chat: C
       <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={biz ? 42 : 52} group={chat.kind === 'group'} business={chat.kind === 'business' && !agentView} />
       <View style={{ flex: 1, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Txt v="bodyStrong" numberOfLines={1} style={{ flex: 1, fontFamily: hasUnread ? 'Inter_700Bold' : 'Inter_600SemiBold' }}>{chatTitle(chat)}</Txt>
+          {chat.incognito && <Icon name="glasses" size={16} tone="muted" />}
+          <Txt v="bodyStrong" numberOfLines={1} style={{ flex: 1, fontFamily: chat.incognito ? 'SpecialElite_400Regular' : hasUnread ? 'Inter_700Bold' : 'Inter_600SemiBold' }}>{chatTitle(chat)}</Txt>
+          {chat.incognito && incognitoLeft(chat) && <Txt v="mono" tone="faint">⏳ {incognitoLeft(chat)}</Txt>}
           {chat.pinned_at && <Icon name="pin" size={12} tone="faint" />}
           <Txt v="mono" tone={hasUnread ? 'accent' : 'faint'}>{listTime(chat.last_at ?? chat.created_at)}</Txt>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {chat.last_sender === user?.id && !chat.last_deleted && chat.last_message_id ? <Icon name="checkmark-done" size={16} tone="faint" /> : null}
+          {chat.last_sender === user?.id && !chat.last_deleted && chat.last_message_id ? <Icon name={chat.last_delivered || chat.last_read ? 'checkmark-done' : 'checkmark'} size={16} color={chat.last_read ? c.success : c.textFaint} /> : null}
           <Txt v="small" tone={hasUnread ? 'text' : 'muted'} numberOfLines={1} style={{ flex: 1, fontStyle: chat.last_deleted ? 'italic' : 'normal', fontFamily: hasUnread ? 'Inter_500Medium' : 'Inter_400Regular' }}>{previewText(chat, user?.id)}</Txt>
           {muted && <Icon name="notifications-off" size={14} tone="faint" />}
-          {chat.unread > 0 ? <Badge count={chat.unread} tone={muted ? 'muted' : 'accent'} /> : chat.marked_unread ? <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.accent }} accessibilityLabel="Marcado como no leído" /> : null}
+          {chat.unread > 0 ? <Badge count={chat.unread} tone={muted ? 'muted' : 'new'} /> : chat.marked_unread ? <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.success }} accessibilityLabel="Marcado como no leído" /> : null}
         </View>
         {(showState || (chat.kind === 'business' && !agentView)) && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>

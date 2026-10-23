@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Animated, Platform, View } from 'react-native';
 import { BusinessMembership, myBusinesses } from '../lib/api';
 import { useTheme } from '../theme/ThemeProvider';
-import { Space } from '../theme/tokens';
+import { Space, legacyBizAccent } from '../theme/tokens';
 import { Icon, Txt } from '../ui';
 import { useAuth } from './AuthProvider';
 
@@ -23,7 +23,7 @@ const ACTIVE_KEY = 'cifra.activeBusiness';
 
 export function SpaceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const { space, setSpace, c } = useTheme();
+  const { space, setSpace, setBizAccent } = useTheme();
   const [businesses, setBusinesses] = useState<BusinessMembership[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -39,6 +39,8 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
 
   const active = useMemo(() => businesses.find((b) => b.business.id === activeId) ?? businesses[0] ?? null, [businesses, activeId]);
   const setActiveBusiness = useCallback((id: string) => { setActiveId(id); AsyncStorage.setItem(ACTIVE_KEY, id).catch(() => {}); }, []);
+  // The Business space wears the colour of the active business, so switching businesses switches the whole workspace look.
+  useEffect(() => { if (active) setBizAccent(legacyBizAccent(active.business.accent)); }, [active?.business.id, active?.business.accent, setBizAccent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchSpace = useCallback((next?: Space) => {
     const target: Space = next ?? (space === 'personal' ? 'business' : 'personal');

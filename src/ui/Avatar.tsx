@@ -17,8 +17,9 @@ export function initials(name?: string | null) {
 type Props = { name?: string | null; seed?: string; path?: string | null; size?: number; business?: boolean; group?: boolean; ring?: boolean };
 
 export function Avatar({ name, seed, path, size = 48, business, group, ring }: Props) {
-  const { space } = useTheme();
-  const tint = avatarTints[hash(seed ?? name ?? '?') % avatarTints.length];
+  const { space, incognito } = useTheme();
+  // Incognito rooms are black & white: only real photos keep their colour, generated avatars go grey.
+  const tint: [string, string] = incognito ? ['#5A5A5A', '#1E1E1E'] : avatarTints[hash(seed ?? name ?? '?') % avatarTints.length];
   // Personal avatars are soft squircles (not circles); Business ones are crisp rounded squares.
   const radius = space === 'business' ? size * 0.16 : business ? size * 0.2 : size * 0.38;
   const [broken, setBroken] = useState(false);

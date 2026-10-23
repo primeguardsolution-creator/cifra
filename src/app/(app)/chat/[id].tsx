@@ -8,8 +8,11 @@ import { Wallpaper } from '../../../components/Wallpaper';
 import { useCall } from '../../../features/calls/CallProvider';
 import { Bubble } from '../../../features/chat/Bubble';
 import { Composer } from '../../../features/chat/Composer';
+import { PullToRefresh } from '../../../features/chat/PullToRefresh';
+import { IncognitoBar, IncognitoGone, IncognitoStartSheet } from '../../../features/chat/Incognito';
+import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/chat/UnknownContact';
 import { VideoModal } from '../../../features/chat/VideoPlayer';
-import { ConversationState, Message, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
+import { ConversationState, Message, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
 import { dayLabel } from '../../../lib/format';
 import { WIDE } from '../../../lib/layout';
@@ -19,7 +22,8 @@ import { useConversation } from '../../../features/chat/useConversation';
 import { useAuth } from '../../../state/AuthProvider';
 import { useChats } from '../../../state/ChatsProvider';
 import { useSpace } from '../../../state/SpaceProvider';
-import { useTheme } from '../../../theme/ThemeProvider';
+import { IncognitoTheme, useTheme } from '../../../theme/ThemeProvider';
+import { font } from '../../../theme/tokens';
 import { Avatar, EmptyState, Icon, IconButton, Pressy, Sheet, SheetRow, Txt, TypingDots, useToast } from '../../../ui';
 import { hapticSoft } from '../../../lib/haptics';
 import { loc, t } from '../../../i18n';
@@ -27,6 +31,7 @@ import { loc, t } from '../../../i18n';
 type Row = { type: 'msg'; m: Message; joinedOlder: boolean; joinedNewer: boolean } | { type: 'day'; label: string; key: string };
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 const SAME_GROUP_MS = 5 * 60 * 1000;
+type Conv = ReturnType<typeof useConversation>;
 
 export default function ChatScreen() {
   const { id, m } = useLocalSearchParams<{ id: string; m?: string }>();
@@ -35,8 +40,18 @@ export default function ChatScreen() {
   return <ChatInner id={id} me={user.id} jumpTo={m} />;
 }
 
-function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; jumpTo?: string }) {
-  const { c } = useTheme();
+/** Loads the conversation; incognito rooms get the black & white, typewriter theme for everything below. */
+function ChatInner({ id, me, jumpTo }: { id: string; me: string; jumpTo?: string }) {
+  const conv = useConversation(id, me);
+  const { refresh } = useChats();
+  const back = () => { refresh(); router.replace('/chats'); };
+  if (conv.destroyed) return <IncognitoTheme><IncognitoGone onBack={back} /></IncognitoTheme>;
+  const body = <ChatBody id={id} me={me} jumpToParam={jumpTo} conv={conv} />;
+  return conv.chat?.incognito ? <IncognitoTheme>{body}</IncognitoTheme> : body;
+}
+
+function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpToParam?: string; conv: Conv }) {
+  const { c, incognito } = useTheme();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -44,7 +59,6 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
   const { patch, refresh } = useChats();
   const { active } = useSpace();
   const call = useCall();
-  const conv = useConversation(id, me);
   const { chat, messages } = conv;
   const agent = chat?.perspective === 'agent';
 
@@ -63,10 +77,18 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
   const [scheduled, setScheduled] = useState<ScheduledRow[]>([]);
   const [schedOpen, setSchedOpen] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [incognitoStart, setIncognitoStart] = useState(false);
+  const [report, setReport] = useState(false);
   const list = useRef<FlatList<Row>>(null);
+  const atEnd = useRef(true); // scrolled to the newest message (inverted list: offset 0)
 
   const businessId = chat?.business_id ?? null;
   const myRole = active?.business.id === businessId ? active?.role : undefined;
+  const directPeer = chat?.kind === 'direct' && chat.peer_id ? chat.peer_id : null;
+  const { known, setKnown } = useIsContact(directPeer && !incognito ? directPeer : null);
+  // Unknown contact: someone not in my contacts who has already written to me in a 1:1 chat.
+  const peerWrote = useMemo(() => !!directPeer && messages.some((x) => x.sender_id === directPeer && !x.is_automated), [messages, directPeer]);
+  const showUnknown = !!directPeer && !incognito && known === false && peerWrote && !blocked;
 
   useEffect(() => {
     if (!chat) return;
@@ -113,6 +135,8 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
 
   const nameOf = useCallback((uid: string) => (uid === me ? 'Tú' : conv.people[uid]?.display_name ?? (uid === chat?.peer_id ? chat?.peer_name : undefined) ?? 'Alguien'), [conv.people, me, chat?.peer_id, chat?.peer_name]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  // In an incognito room the title is the room's name; the person is named through their profile card.
+  const peerName = directPeer ? (incognito ? conv.people[directPeer]?.display_name ?? 'la otra persona' : chat ? chatTitle(chat) : '') : '';
 
   const guard = async (fn: () => Promise<unknown>, fallback?: string) => { try { await fn(); } catch (e) { toast.show(friendly(e, fallback), 'error'); } };
 
@@ -123,6 +147,7 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
 
   const subtitle = conv.typingNow.length
     ? (chat?.kind === 'group' ? t('{name} está escribiendo…', { name: nameOf(conv.typingNow[0]) }) : 'escribiendo…')
+    : incognito ? t('Incógnito con {name}', { name: peerName })
     : chat?.kind === 'group' ? t('{n} participantes', { n: chat.member_count })
     : agent ? chat?.peer_phone ? formatPhone(chat.peer_phone) : 'Cliente'
     : chat?.kind === 'business' ? 'Cuenta de negocio'
@@ -145,7 +170,7 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingBottom: 8, minHeight: 56 }}>
         {!wide && <IconButton icon="chevron-back" label="Volver" onPress={() => (router.canGoBack() ? router.back() : router.replace(agent ? '/inbox' : '/chats'))} />}
         <Pressy onPress={openProfile} accessibilityRole="button" accessibilityLabel="Ver perfil" scale={0.99} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: wide ? 10 : 2 }}>
-          {chat && <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={42} group={chat.kind === 'group'} business={chat.kind === 'business' && !agent} />}
+          {chat && (incognito ? <View style={{ width: 42, height: 42, borderRadius: 4, borderWidth: 1.5, borderColor: c.text, alignItems: 'center', justifyContent: 'center' }}><Icon name="glasses" size={24} tone="text" /></View> : <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={42} group={chat.kind === 'group'} business={chat.kind === 'business' && !agent} />)}
           <View style={{ flex: 1 }}>
             <Txt v="bodyStrong" numberOfLines={1}>{chat ? chatTitle(chat) : ' '}</Txt>
             {conv.typingNow.length ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><TypingDots size={4} /><Txt v="caption" tone="accent" numberOfLines={1}>{chat?.kind === 'group' ? t('{name} escribe', { name: nameOf(conv.typingNow[0]) }) : 'escribiendo'}</Txt></View> : <Txt v="caption" tone="muted" numberOfLines={1}>{subtitle}</Txt>}
@@ -156,7 +181,7 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stateMeta[chat.state].color }} /><Txt v="caption">{stateMeta[chat.state].label}</Txt>
           </Pressy>
         )}
-        {call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && (
+        {call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && !incognito && (
           <>
             <IconButton icon="call-outline" label="Llamada de voz" wiggle onPress={() => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, 'audio')} />
             <IconButton icon="videocam-outline" label="Videollamada" pop onPress={() => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, 'video')} />
@@ -165,6 +190,7 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
         {agent && <IconButton icon="person-add-outline" label="Asignar" onPress={() => setAssignPicker(true)} badge={!chat?.assigned_to} />}
         <IconButton icon="ellipsis-horizontal" label="Más opciones" onPress={() => setMenu(true)} />
       </View>
+      {chat?.incognito && <IncognitoBar chat={chat} peerName={peerName} onChanged={(p) => { conv.setChat((x) => x && { ...x, ...p }); patch(id, p); }} />}
     </View>
   );
 
@@ -175,9 +201,10 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
     <FlatList
       ref={list} data={rows} inverted keyExtractor={(r) => (r.type === 'msg' ? r.m.id : r.key)}
       keyboardShouldPersistTaps="handled" onEndReached={conv.loadOlder} onEndReachedThreshold={0.4}
+      onScroll={(e) => { atEnd.current = e.nativeEvent.contentOffset.y <= 6; }} scrollEventThrottle={64}
       onScrollToIndexFailed={() => {}}
       contentContainerStyle={{ paddingVertical: 12 }}
-      ListFooterComponent={conv.loadingMore ? <ActivityIndicator style={{ margin: 16 }} color={c.accent} /> : conv.hasMore ? null : <Notice />}
+      ListFooterComponent={conv.loadingMore ? <ActivityIndicator style={{ margin: 16 }} color={c.accent} /> : conv.hasMore ? null : <Notice incognito={incognito} />}
       ListEmptyComponent={conv.loading ? null : <View style={{ transform: [{ scaleY: -1 }] }}><EmptyState icon="chatbubble-ellipses" title="Empieza la conversación" body="Escribe el primer mensaje. Solo vosotros podéis verlo." /></View>}
       renderItem={({ item }) => {
         if (item.type === 'day') return <View style={{ alignItems: 'center', marginTop: 14, marginBottom: 6 }}><View style={{ backgroundColor: c.sunken, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}><Txt v="mono" tone="muted" style={{ textTransform: 'capitalize' }}>{item.label}</Txt></View></View>;
@@ -188,14 +215,15 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
         const author = agent ? (businessSide && m.sender_id !== me && !m.is_automated ? nameOf(m.sender_id) : undefined) : chat?.kind === 'group' && !mine ? nameOf(m.sender_id) : undefined;
         const target = m.reply_to_id ? byId.get(m.reply_to_id) ?? null : undefined;
         const readable = !!conv.othersReadAt && conv.othersReadAt >= m.created_at;
+        const delivered = readable || (!!conv.othersDeliveredAt && conv.othersDeliveredAt >= m.created_at);
         return (
           <Bubble
-            m={m} mine={mine} me={me} joinedOlder={item.joinedOlder} joinedNewer={item.joinedNewer} read={readable} starred={stars.has(m.id)} highlight={flash === m.id}
+            m={m} mine={mine} me={me} joinedOlder={item.joinedOlder} joinedNewer={item.joinedNewer} read={readable} delivered={delivered} starred={stars.has(m.id)} highlight={flash === m.id}
             showAuthor={!!author && !item.joinedOlder && !m.is_internal} author={author}
             slack={agent} slackName={agent ? (m.sender_id === chat?.peer_id ? chat?.peer_name ?? 'Cliente' : m.is_automated ? chat?.business_name ?? 'Negocio (auto)' : nameOf(m.sender_id)) : undefined} authorId={m.sender_id} authorAvatar={agent ? (m.sender_id === chat?.peer_id ? chat?.peer_avatar : conv.people[m.sender_id]?.avatar_path) : undefined} isCustomer={agent && m.sender_id === chat?.peer_id}
             replyTo={m.reply_to_id ? target : undefined} replyAuthor={target ? nameOf(target.sender_id) : undefined}
             reactions={conv.reactions.filter((x) => x.message_id === m.id)}
-            onOpenActions={setActionFor} onOpenImage={setViewer} onOpenVideo={setVideo} onJumpTo={jumpTo} onReply={(x) => { setReplyTo(x); setEditing(null); }} onCallBack={call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked ? (kind) => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, kind) : undefined}
+            onOpenActions={setActionFor} onOpenImage={setViewer} onOpenVideo={setVideo} onJumpTo={jumpTo} onReply={(x) => { setReplyTo(x); setEditing(null); }} onCallBack={call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && !incognito ? (kind) => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, kind) : undefined}
             onRetry={(x) => guard(() => conv.retry(x))} onReact={(x, e) => guard(() => conv.react(x.id, conv.reactions.some((r) => r.message_id === x.id && r.user_id === me && r.emoji === e) ? null : e))}
           />
         );
@@ -208,7 +236,7 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {header}
-      <View style={{ flex: 1, backgroundColor: c.bg }}><Wallpaper />{body}</View>
+      <View style={{ flex: 1, backgroundColor: c.bg }}><Wallpaper /><PullToRefresh atEnd={atEnd} onRefresh={async () => { await conv.reload(); refresh(); }}>{body}</PullToRefresh></View>
       {scheduled.length > 0 && (
         <Pressy onPress={() => setSchedOpen(true)} accessibilityRole="button" accessibilityLabel="Ver mensajes programados" scale={0.99} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: c.accentSoft, borderTopWidth: 1, borderTopColor: c.border }}>
           <Icon name="alarm" size={16} color={c.accentSoftText} />
@@ -216,12 +244,15 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
           <Icon name="chevron-up" size={16} color={c.accentSoftText} />
         </Pressy>
       )}
+      {showUnknown && chat && directPeer && (
+        <UnknownContactBar me={me} peerId={directPeer} peerName={chatTitle(chat)} peerPhone={chat.peer_phone} conversationId={id} onAdded={() => { setKnown(true); refresh(); }} onBlocked={() => setBlocked(true)} />
+      )}
       {chat && (
         <Composer
           agent={agent} quickReplies={quickReplies} disabledReason={disabledReason} autoFocus={wide}
           replyTo={replyTo} replyAuthor={replyTo ? nameOf(replyTo.sender_id) : undefined} onCancelReply={() => setReplyTo(null)}
           editing={editing} onCancelEdit={() => setEditing(null)} onTyping={conv.notifyTyping}
-          onSchedule={async (body, at, replyTo, internal) => { await scheduleMessage(me, { conversation_id: id, body, send_at: at.toISOString(), reply_to_id: replyTo, is_internal: internal }); loadScheduled(); }}
+          onSchedule={incognito ? undefined : async (body, at, replyTo, internal) => { await scheduleMessage(me, { conversation_id: id, body, send_at: at.toISOString(), reply_to_id: replyTo, is_internal: internal }); loadScheduled(); }}
           onSend={(v) => guard(() => conv.send({ body: v.body, file: v.file, internal: v.internal, replyTo: v.replyTo }))}
           onEditSave={(mid, text) => { setEditing(null); guard(() => conv.edit(mid, text)); }}
         />
@@ -233,7 +264,7 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
         </View>
         <SheetRow icon="arrow-undo" label="Responder" onPress={() => { setReplyTo(actionFor); setEditing(null); setActionFor(null); }} />
         {!!actionFor?.body && <SheetRow icon="copy" label="Copiar" onPress={async () => { await Clipboard.setStringAsync(actionFor!.body!); setActionFor(null); toast.show('Copiado', 'success'); }} />}
-        <SheetRow icon={stars.has(actionFor?.id ?? '') ? 'star-outline' : 'star'} label={stars.has(actionFor?.id ?? '') ? 'Quitar de destacados' : 'Destacar'} onPress={() => { const m = actionFor!; const on = !stars.has(m.id); setActionFor(null); setStars((s2) => { const n = new Set(s2); if (on) n.add(m.id); else n.delete(m.id); return n; }); guard(() => starMessage(me, m.id, on)); }} />
+        {!incognito && <SheetRow icon={stars.has(actionFor?.id ?? '') ? 'star-outline' : 'star'} label={stars.has(actionFor?.id ?? '') ? 'Quitar de destacados' : 'Destacar'} onPress={() => { const m = actionFor!; const on = !stars.has(m.id); setActionFor(null); setStars((s2) => { const n = new Set(s2); if (on) n.add(m.id); else n.delete(m.id); return n; }); guard(() => starMessage(me, m.id, on)); }} />}
         {canEdit && <SheetRow icon="create" label="Editar" onPress={() => { setEditing(actionFor); setReplyTo(null); setActionFor(null); }} />}
         {mineAction && <SheetRow icon="trash" label="Eliminar para todos" tone="danger" onPress={() => { const m = actionFor!; setActionFor(null); guard(() => conv.remove(m.id), 'No se pudo eliminar.'); }} />}
       </Sheet>
@@ -267,21 +298,32 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
       <Sheet visible={menu} onClose={() => setMenu(false)} title={chat ? chatTitle(chat) : undefined}>
         {chat && (
           <View style={{ alignItems: 'center', gap: 6, paddingVertical: 10 }}>
-            <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={84} group={chat.kind === 'group'} business={chat.kind === 'business' && !agent} />
+            {incognito ? <Icon name="glasses" size={64} tone="text" /> : <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={84} group={chat.kind === 'group'} business={chat.kind === 'business' && !agent} />}
             {subtitle ? <Txt tone="muted">{subtitle}</Txt> : null}
-            {chat.kind === 'direct' && chat.peer_id && conv.people[chat.peer_id]?.bio ? <Txt v="small" tone="muted" style={{ textAlign: 'center', maxWidth: 320 }}>{conv.people[chat.peer_id]?.bio}</Txt> : null}
+            {chat.kind === 'direct' && chat.peer_id && !incognito && conv.people[chat.peer_id]?.bio ? <Txt v="small" tone="muted" style={{ textAlign: 'center', maxWidth: 320 }}>{conv.people[chat.peer_id]?.bio}</Txt> : null}
+            {incognito && <Txt v="caption" tone="muted" style={{ textAlign: 'center', maxWidth: 320, fontFamily: font.typewriter }}>Blanco y negro, máquina de escribir: así sabes que esto se autodestruye.</Txt>}
           </View>
         )}
-        <SheetRow icon="search" label="Buscar en mensajes" onPress={() => { setMenu(false); router.push('/search'); }} />
+        {!incognito && <SheetRow icon="search" label="Buscar en mensajes" onPress={() => { setMenu(false); router.push('/search'); }} />}
         {chat?.kind === 'business' && !agent && chat.business_id && <SheetRow icon="storefront" label="Ver perfil y catálogo" onPress={() => { setMenu(false); router.push({ pathname: '/b/[id]', params: { id: chat.business_id! } }); }} />}
+        {directPeer && !incognito && !blocked && (
+          <SheetRow icon="glasses" label={t('Chat incógnito con {name}', { name: chat ? chatTitle(chat) : '' })} sub="Aparte, en blanco y negro · se autodestruye a las 3 h sin actividad o cuando ambos queráis" onPress={() => { setMenu(false); setIncognitoStart(true); }} />
+        )}
+        {directPeer && known === false && !incognito && (
+          <SheetRow icon="person-add" label="Añadir a contactos" onPress={() => { setMenu(false); guard(async () => { await saveContact(me, { display_name: chat ? chatTitle(chat) : 'Contacto', phone: chat?.peer_phone ?? null, contact_user_id: directPeer }); setKnown(true); refresh(); toast.show('Añadido a tus contactos', 'success'); }); }} />
+        )}
+        {(directPeer || (chat?.kind === 'business' && !agent)) && <SheetRow icon="flag-outline" label={chat?.kind === 'business' && !agent ? 'Reportar negocio' : 'Reportar contacto'} onPress={() => { setMenu(false); setReport(true); }} />}
         {chat?.kind === 'direct' && chat.peer_id && (
           <SheetRow icon={blocked ? 'checkmark-circle' : 'ban'} label={blocked ? 'Desbloquear contacto' : 'Bloquear contacto'} tone={blocked ? 'accent' : 'danger'}
             onPress={() => guard(async () => { if (blocked) await unblockUser(me, chat.peer_id!); else await blockUser(me, chat.peer_id!); setBlocked(!blocked); setMenu(false); toast.show(blocked ? 'Contacto desbloqueado' : 'Contacto bloqueado', 'success'); })} />
         )}
         {chat?.kind === 'group' && <SheetRow icon="exit" label="Salir del grupo" tone="danger" onPress={() => guard(async () => { await leaveConversation(id); setMenu(false); refresh(); router.replace('/chats'); })} />}
-        {chat && chat.kind !== 'business' && <SheetRow icon={chat.muted_until ? 'notifications' : 'notifications-off'} label={chat.muted_until ? 'Activar notificaciones' : 'Silenciar notificaciones'}
+        {chat && chat.kind !== 'business' && !incognito && <SheetRow icon={chat.muted_until ? 'notifications' : 'notifications-off'} label={chat.muted_until ? 'Activar notificaciones' : 'Silenciar notificaciones'}
           onPress={() => guard(async () => { const until = chat.muted_until ? null : new Date(Date.now() + 365 * 864e5).toISOString(); const { error } = await supabase.from('conversation_members').update({ muted_until: until }).eq('conversation_id', id).eq('user_id', me); if (error) throw error; conv.setChat((x) => x && { ...x, muted_until: until }); patch(id, { muted_until: until }); setMenu(false); })} />}
       </Sheet>
+
+      {directPeer && chat && <IncognitoStartSheet visible={incognitoStart} onClose={() => setIncognitoStart(false)} peerId={directPeer} peerName={chatTitle(chat)} />}
+      {chat && <ReportSheet visible={report} onClose={() => setReport(false)} me={me} peerId={directPeer} businessId={chat.kind === 'business' && !agent ? chat.business_id : null} conversationId={id} name={chatTitle(chat)} onBlocked={() => setBlocked(true)} />}
 
       <VideoModal url={video} onClose={() => setVideo(null)} />
       <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer(null)}>
@@ -294,13 +336,13 @@ function ChatInner({ id, me, jumpTo: jumpToParam }: { id: string; me: string; ju
   );
 }
 
-function Notice() {
+function Notice({ incognito }: { incognito: boolean }) {
   const { c } = useTheme();
   return (
     <View style={{ alignItems: 'center', marginVertical: 12, paddingHorizontal: 30 }}>
       <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: c.accentSoft, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 }}>
-        <Icon name="lock-closed" size={12} color={c.accentSoftText} />
-        <Txt v="caption" style={{ color: c.accentSoftText, textAlign: 'center' }}>Solo los participantes ven esta conversación. Cifrada en tránsito y en reposo.</Txt>
+        <Icon name={incognito ? 'glasses' : 'lock-closed'} size={12} color={c.accentSoftText} />
+        <Txt v="caption" style={{ color: c.accentSoftText, textAlign: 'center' }}>{incognito ? 'Chat incógnito: nada se guarda cuando se destruye. Las fotos y vídeos se ven a color.' : 'Solo los participantes ven esta conversación. Cifrada en tránsito y en reposo.'}</Txt>
       </View>
     </View>
   );

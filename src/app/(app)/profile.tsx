@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { PhotoPicker } from '../../components/PhotoPicker';
+import { CoverPicker, PhotoPicker } from '../../components/PhotoPicker';
 import { ProfileHero } from '../../components/ProfileHero';
 import { updateMyProfile } from '../../lib/api';
 import { friendly } from '../../lib/errors';
@@ -43,15 +43,17 @@ export default function Profile() {
   };
 
   const savePhoto = async (path: string | null) => { await updateMyProfile(user.id, { avatar_path: path }); await refreshProfile(); };
+  const saveCover = async (path: string | null) => { await updateMyProfile(user.id, { cover_path: path }); await refreshProfile(); };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ alignItems: 'center', paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
           <ProfileHero
-            kind="person" compact name={name || profile?.display_name || '…'} seed={user.id} avatarPath={profile?.avatar_path} handle={username.replace(/^@/, '') || null} bio={bio.trim() || null}
+            kind="person" compact name={name || profile?.display_name || '…'} seed={user.id} avatarPath={profile?.avatar_path} coverPath={profile?.cover_path} handle={username.replace(/^@/, '') || null} bio={bio.trim() || null}
             badges={[{ icon: 'person', label: 'Personal' }, { icon: hidePhone ? 'eye-off' : 'call', label: hidePhone ? 'Número oculto' : 'Número visible', tone: 'muted' }]}
             topLeft={<IconButton icon="chevron-back" label="Volver" onPress={() => (router.canGoBack() ? router.back() : router.replace('/settings'))} filled />}
+            bottomRight={<CoverPicker path={profile?.cover_path} folder={user.id} onChange={saveCover} light />}
           />
           <View style={{ width: '100%', maxWidth: 520, gap: 18, padding: 20 }}>
             <Txt v="caption" tone="faint" style={{ textAlign: 'center' }}>Así te ven las personas con las que chateas</Txt>

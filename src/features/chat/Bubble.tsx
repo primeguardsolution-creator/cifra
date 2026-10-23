@@ -14,7 +14,7 @@ import { t, tr } from '../../i18n';
 
 export type BubbleProps = {
   m: Message; mine: boolean; replyTo?: Message | null; replyAuthor?: string; author?: string; showAuthor?: boolean;
-  joinedOlder: boolean; joinedNewer: boolean; read: boolean; reactions: Reaction[]; me: string;
+  joinedOlder: boolean; joinedNewer: boolean; read: boolean; /** Reached the other person's device (two grey ticks). */ delivered?: boolean; reactions: Reaction[]; me: string;
   onOpenActions: (m: Message) => void; onOpenImage: (uri: string) => void; onOpenVideo?: (uri: string) => void; onRetry: (m: Message) => void; onJumpTo?: (id: string) => void;
   onReact: (m: Message, emoji: string) => void; starred?: boolean; highlight?: boolean; onReply?: (m: Message) => void; onCallBack?: (kind: 'audio' | 'video') => void;
   /** Business team view: Slack-style message rows instead of bubbles. */
@@ -72,7 +72,7 @@ function Attachment({ m, mine, onOpenImage, onOpenVideo }: { m: Message; mine: b
 }
 
 function BubbleBase(p: BubbleProps) {
-  const { c, space } = useTheme();
+  const { c, space, incognito } = useTheme();
   const { m, mine } = p;
   const [hover, setHover] = useState(false);
   const native = Platform.OS !== 'web';
@@ -208,14 +208,14 @@ function BubbleBase(p: BubbleProps) {
                   </View>
                   {p.onCallBack && <Pressy onPress={() => p.onCallBack!(m.body!.startsWith('📹') ? 'video' : 'audio')} accessibilityRole="button" accessibilityLabel="Devolver la llamada" scale={0.9} style={{ paddingHorizontal: 11, height: 30, borderRadius: 15, backgroundColor: mine ? 'rgba(255,255,255,0.18)' : c.accent, justifyContent: 'center' }}><Txt v="caption" style={{ color: mine ? c.bubbleOutText : c.accentText, fontFamily: 'Inter_600SemiBold' }}>{mine ? 'Repetir' : 'Devolver'}</Txt></Pressy>}
                 </View>
-              ) : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? '#BFF0DD' : c.accent} /> : null}
+              ) : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
             </>
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 3 }}>
-            {p.starred && <Icon name="star" size={11} color={mine ? '#F6D77A' : c.warning} />}
+            {p.starred && <Icon name="star" size={11} color={mine && !incognito ? '#F6D77A' : c.warning} />}
             {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>editado</Txt>}
             <Txt v="mono" style={{ color: meta, fontSize: 10 }}>{messageTime(m.created_at)}</Txt>
-            {mine && !deleted && !internal && (m.pending ? <Icon name="time-outline" size={13} color={meta} /> : m.failed ? <Icon name="alert-circle" size={14} color={c.danger} /> : <Icon name={p.read ? 'checkmark-done' : 'checkmark'} size={15} color={p.read ? '#7CF0C4' : meta} />)}
+            {mine && !deleted && !internal && (m.pending ? <Icon name="time-outline" size={13} color={meta} /> : m.failed ? <Icon name="alert-circle" size={14} color={c.danger} /> : <Icon name={p.read || p.delivered ? 'checkmark-done' : 'checkmark'} size={15} color={p.read && !incognito ? '#7CF0C4' : meta} />)}
           </View>
         </Pressy>
         {Platform.OS === 'web' && hover && !deleted && !m.pending && (
@@ -225,7 +225,7 @@ function BubbleBase(p: BubbleProps) {
         )}
       </View>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', alignSelf: 'center', top: '30%', opacity: heart, transform: [{ scale: heart.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.5] }) }] }}>
-        <Icon name="heart" size={54} color="#FF4D6D" />
+        <Icon name="heart" size={54} color={incognito ? c.text : '#FF4D6D'} />
       </Animated.View>
       {m.failed && (
         <Pressy onPress={() => p.onRetry(m)} accessibilityRole="button" style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginTop: 4, marginRight: 4 }}>

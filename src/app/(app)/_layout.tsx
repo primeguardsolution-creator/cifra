@@ -2,6 +2,7 @@ import { Redirect, Stack, usePathname } from 'expo-router';
 import { View, useWindowDimensions } from 'react-native';
 import { ChatsPane } from '../../components/ChatsPane';
 import { Rail, TabBar, topLevel } from '../../components/Nav';
+import { UpdateBanner } from '../../components/UpdateBanner';
 import { useEffect } from 'react';
 import { assistantStore } from '../../features/assistant/store';
 import { useAuth } from '../../state/AuthProvider';
@@ -47,6 +48,7 @@ function Frame() {
         </View>
       )}
       <View style={{ flex: 1 }}>
+        <UpdateBanner />
         <View style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: wide ? 'none' : 'default' }} />
         </View>

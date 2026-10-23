@@ -75,6 +75,10 @@ await db.exec(migration('20261025_000007_reserved_usernames.sql'));
 await db.exec(migration('20261025_000007_reserved_usernames.sql'));
 await db.exec(migration('20261026_000008_crm_agenda_profiles.sql'));
 await db.exec(migration('20261026_000008_crm_agenda_profiles.sql'));
+await db.exec(migration('20261027_000009_social_incognito_covers.sql'));
+await db.exec(migration('20261027_000009_social_incognito_covers.sql'));
+await db.exec(migration('20261028_000010_delivery_receipts.sql'));
+await db.exec(migration('20261028_000010_delivery_receipts.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -568,7 +572,7 @@ await check('agenda: el equipo crea citas, el cliente recibe la tarjeta en su ch
   apptId = await as('cleo', async () => (await q(`select public.create_appointment($1, $2, 'Corte de pelo', $3, $4, 'primera vez', $5) as id`, [biz, custBen, start, end, ids.cleo]))[0].id);
   await as('ben', async () => {
     eq((await q(`select * from public.my_appointments()`)).length, 1);
-    const card = await q(`select body from public.messages where body like '📅%' order by created_at desc limit 1`); eq(/Cita agendada/.test(card[0].body), true);
+    const card = await q(`select body from public.messages where body like '📅%' order by created_at desc limit 1`); eq(/Invitación a cita/.test(card[0].body), true);
     await db.query(`select public.respond_appointment($1, 'confirmed')`, [apptId]);
     eq((await q(`select status from public.appointments where id = $1`, [apptId]))[0].status, 'confirmed');
     await denied(db.query(`update public.appointments set status = 'done' where id = $1`, [apptId]), 'customer direct update');
@@ -593,6 +597,105 @@ await check('viewer del negocio: puede leer la agenda pero no escribir', async (
     await denied(db.query(`select public.create_appointment($1, null, 'x', now() + interval '5 days', now() + interval '5 days 1 hour')`, [biz]), 'viewer create');
     await denied(db.query(`insert into public.customers (business_id, name) values ($1, 'x')`, [biz]), 'viewer customer');
   });
+});
+
+console.log('\nInvitaciones, @usuario, CRM → chat, publicaciones, portadas, incógnito y reportes (v9)');
+await check('invitar a cualquier usuario a una cita lo convierte en cliente y le deja la tarjeta para aceptar', async () => {
+  const start = new Date(Date.now() + 4 * 86400e3).toISOString(); const end = new Date(Date.now() + 4 * 86400e3 + 1800e3).toISOString();
+  const id = await as('cleo', async () => (await q(`select public.create_appointment($1, null, 'Demo', $2, $3, null, null, $4) as id`, [biz, start, end, ids.ben]))[0].id);
+  eq((await q(`select user_id from public.customers where business_id = $1 and user_id = $2`, [biz, ids.ben])).length, 1);
+  await as('ben', async () => {
+    const mine = await q(`select id, status, conversation_id from public.my_appointments() where id = $1`, [id]);
+    eq(mine.length, 1); eq(mine[0].status, 'scheduled'); eq(!!mine[0].conversation_id, true);
+    await db.query(`select public.respond_appointment($1, 'confirmed')`, [id]);
+    eq((await q(`select status from public.appointments where id = $1`, [id]))[0].status, 'confirmed');
+  });
+  await as('cleo', async () => denied(db.query(`select public.create_appointment($1, null, 'Yo', $2, $3, null, null, auth.uid())`, [biz, start, end]), 'self invite'));
+  await as('cleo', async () => denied(db.query(`select public.create_appointment($1, null, 'Equipo', $2, $3, null, null, $4)`, [biz, start, end, ids.dani]), 'team member (viewer) invite'));
+});
+await check('search_users encuentra cuentas por prefijo de @usuario y dice si ya son contacto', async () => {
+  await as('cleo', () => db.query(`update public.profiles set username = 'cleo_x' where id = auth.uid()`));
+  await as('ana', async () => {
+    const rows = await q(`select username, is_self, is_contact from public.search_users('@CLE')`);
+    eq(rows.map((r) => r.username), ['cleo_x']); eq(rows[0].is_self, false);
+    eq((await q(`select * from public.search_users('x')`)).length, 0); // too short
+    await denied(db.query(`select phone from public.search_users('ben')`), 'phone column'); // the phone is never part of the result
+  });
+});
+await check('el equipo puede escribir a un cliente desde el CRM (crea el chat de negocio) y no a quien no está en CIFRA', async () => {
+  const cid = await as('cleo', async () => (await q(`select public.start_customer_chat($1) as id`, [custBen]))[0].id);
+  eq((await q(`select customer_id from public.conversations where id = $1`, [cid]))[0].customer_id, ids.ben);
+  const ghost = await as('cleo', async () => (await q(`insert into public.customers (business_id, name, phone) values ($1, 'Fantasma', '+34 699 999 999') returning id`, [biz]))[0].id);
+  await as('cleo', async () => denied(db.query(`select public.start_customer_chat($1)`, [ghost]), 'not on cifra'));
+  await as('dani', async () => denied(db.query(`select public.start_customer_chat($1)`, [custBen]), 'viewer'));
+  await as('ben', async () => denied(db.query(`select public.start_customer_chat($1)`, [custBen]), 'outsider'));
+});
+await check('publicaciones: un negocio público publica vídeo a 7 días visible para todos; nadie más publica en su nombre', async () => {
+  await as('ana', async () => {
+    await db.query(`insert into public.statuses (user_id, kind, body, media_path, business_id, expires_at) values (auth.uid(), 'video', 'Nuevo menú', 'status/biz/${biz}/v.mp4', $1, now() + interval '7 days')`, [biz]);
+    await denied(db.query(`insert into public.statuses (user_id, kind, body, business_id, expires_at) values (auth.uid(), 'text', 'x', $1, now() + interval '30 days')`, [biz]), 'too long');
+    eq((await q(`select public.storage_can_write($1) as ok`, [`status/biz/${biz}/v.mp4`]))[0].ok, true);
+  });
+  await as('dani', async () => {
+    eq((await q(`select kind from public.statuses where business_id = $1`, [biz])).map((r) => r.kind), ['video']);
+    eq((await q(`select public.storage_can_read($1) as ok`, [`status/biz/${biz}/v.mp4`]))[0].ok, true);
+    await denied(db.query(`insert into public.statuses (user_id, kind, body, business_id) values (auth.uid(), 'text', 'spam', $1)`, [biz]), 'outsider posting as business');
+    await db.query(`delete from public.statuses where business_id = $1`, [biz]); eq((await q(`select 1 from public.statuses where business_id = $1`, [biz])).length, 1); // RLS: nothing deleted
+  });
+  await as('ben', () => db.query(`insert into public.statuses (user_id, kind, media_path) values (auth.uid(), 'video', 'status/' || auth.uid() || '/v.mp4')`));
+});
+await check('portadas: cada uno cambia la suya; el color del negocio solo lo cambian los gestores y entre 5 opciones', async () => {
+  await as('ben', () => db.query(`update public.profiles set cover_path = auth.uid() || '/cover.jpg' where id = auth.uid()`));
+  await as('ana', async () => {
+    eq((await q(`select cover_path from public.get_profiles(array[$1::uuid])`, [ids.ben]))[0].cover_path, `${ids.ben}/cover.jpg`);
+    await db.query(`update public.businesses set accent = 'cobalt', cover_path = 'business/${biz}/cover.jpg' where id = $1`, [biz]);
+    await denied(db.query(`update public.businesses set accent = 'neon' where id = $1`, [biz]), 'unknown accent');
+  });
+  await as('cleo', async () => { await db.query(`update public.businesses set accent = 'jade' where id = $1`, [biz]); eq((await q(`select accent from public.businesses where id = $1`, [biz]))[0].accent, 'cobalt'); }); // agents: RLS blocks the update
+  await as('dani', async () => eq((await q(`select public.get_business_public($1) ->> 'accent' as a`, [biz]))[0].a, 'cobalt'));
+});
+await check('chat incógnito: con nombre, sin teléfono, se destruye cuando ambos lo piden y no deja rastro', async () => {
+  const cid = await as('ana', async () => (await q(`select public.start_incognito_chat($1, 'Operación Lince') as id`, [ids.dani]))[0].id);
+  await as('dani', async () => {
+    const [row] = await q(`select peer_name, peer_phone, incognito, expires_at, destroy_mine, destroy_peer from public.list_chats(null, $1)`, [cid]);
+    eq(row.peer_name, 'Operación Lince'); eq(row.peer_phone, null); eq(row.incognito, true); eq(!!row.expires_at, true); eq(row.destroy_peer, false);
+    await db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'hola')`, [cid]);
+    eq((await q(`select phone from public.get_profiles(array[$1::uuid])`, [ids.ana]))[0].phone, null); // incognito never unlocks the number
+    eq((await q(`select public.request_incognito_destroy($1) as gone`, [cid]))[0].gone, false);
+  });
+  await as('ana', async () => {
+    const [row] = await q(`select destroy_mine, destroy_peer from public.list_chats(null, $1)`, [cid]); eq(row.destroy_mine, false); eq(row.destroy_peer, true);
+    eq((await q(`select public.request_incognito_destroy($1) as gone`, [cid]))[0].gone, true);
+  });
+  eq((await q(`select 1 from public.conversations where id = $1`, [cid])).length, 0);
+  eq((await q(`select 1 from public.messages where conversation_id = $1`, [cid])).length, 0);
+  await as('ben', async () => denied(db.query(`select public.request_incognito_destroy($1)`, [bizChat]), 'not incognito'));
+  const old = await as('ana', async () => (await q(`select public.start_incognito_chat($1, 'Caduco') as id`, [ids.ben]))[0].id);
+  await db.query(`update public.conversations set expires_at = now() - interval '1 minute' where id = $1`, [old]);
+  await as('ben', async () => eq((await q(`select 1 from public.list_chats(null, $1)`, [old])).length, 0));
+  eq((await q(`select public.purge_incognito() as n`))[0].n, 1);
+});
+await check('reportes: cada uno archiva los suyos, nunca a sí mismo, y nadie lee los de otros', async () => {
+  await as('ben', async () => {
+    await db.query(`insert into public.reports (reporter_id, reported_id, reason) values (auth.uid(), $1, 'desconocido, spam')`, [ids.dani]);
+    await denied(db.query(`insert into public.reports (reporter_id, reported_id, reason) values (auth.uid(), auth.uid(), 'yo')`), 'self report');
+    await denied(db.query(`insert into public.reports (reporter_id, reported_id, reason) values ($1, $2, 'falso')`, [ids.ana, ids.dani]), 'as someone else');
+  });
+  await as('dani', async () => eq((await q(`select * from public.reports`)).length, 0));
+});
+
+console.log('\nAcuses de entrega (v10)');
+await check('un tick al enviar, dos cuando llega al otro dispositivo, dos de color al leer; tambien en la lista de chats', async () => {
+  const cid = await as('ana', async () => (await q(`select public.start_direct_chat($1) as id`, [ids.cleo]))[0].id);
+  await as('ana', async () => {
+    await db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'ping')`, [cid]);
+    const [row] = await q(`select last_delivered, last_read from public.list_chats(null, $1)`, [cid]); eq(row, { last_delivered: false, last_read: false });
+  });
+  await as('cleo', async () => { eq((await q(`select public.mark_delivered() as n`))[0].n >= 1, true); });
+  await as('ana', async () => { const [row] = await q(`select last_delivered, last_read from public.list_chats(null, $1)`, [cid]); eq(row, { last_delivered: true, last_read: false }); });
+  await as('cleo', async () => db.query(`select public.mark_read($1)`, [cid]));
+  await as('ana', async () => { const [row] = await q(`select last_delivered, last_read from public.list_chats(null, $1)`, [cid]); eq(row, { last_delivered: true, last_read: true }); });
+  await as('dani', async () => eq((await q(`select public.mark_delivered($1) as n`, [cid]))[0].n, 0)); // not a member: nothing to mark
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);

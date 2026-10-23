@@ -157,6 +157,8 @@ export default function Settings() {
             <Row icon="ban" title="Contactos bloqueados" onPress={openBlocked} />
             <Divider inset={66} />
             <Row icon="star" title="Mensajes destacados" sub="Los que guardaste para encontrarlos rápido" onPress={() => router.push('/starred')} />
+            <Divider inset={66} />
+            <Row icon="calendar" title="Mis citas" sub="Invitaciones de negocios y citas aceptadas" onPress={() => router.push('/my-appointments')} />
             {lock.available && <><Divider inset={66} /><Row icon="keypad" title="Bloqueo con PIN" sub={lock.enabled ? 'Activado · se bloquea tras 1 minuto fuera de la app' : t('Protege CIFRA con un PIN de {n} dígitos', { n: PIN_DIGITS })} right={<Toggle value={lock.enabled} label="Bloqueo con PIN" onChange={(v) => { setPinError(null); setFirstPin(''); setPinSheet(v ? 'new' : 'off'); }} />} /></>}
             {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="notifications" title="Avisos en el navegador" sub={notifs ? 'Activados cuando la pestaña está en segundo plano' : 'Recibe un aviso con mensajes nuevos'} right={<Toggle value={notifs} onChange={toggleNotifs} label="Avisos del navegador" />} /></>}
           </Card>

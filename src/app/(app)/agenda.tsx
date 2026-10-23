@@ -1,17 +1,18 @@
-import { router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
 import { BizHeader, Key, NoBusiness, Pill } from '../../components/BizUi';
 import { SlotPicker } from '../../components/SlotPicker';
-import { Appointment, ApptStatus, Customer, addDays, apptMeta, createAppointment, crmSync, hm, listAppointments, listCustomers, listRequestedAppointments, longDay, sameDay, startOfDay, updateAppointment } from '../../lib/biz';
-import { TeamMember, listTeam } from '../../lib/api';
+import { Appointment, ApptStatus, Customer, addDays, apptLabel, apptMeta, createAppointment, crmSync, hm, isPendingInvite, listAppointments, listCustomers, listRequestedAppointments, longDay, sameDay, startOfDay, updateAppointment } from '../../lib/biz';
+import { TeamMember, UserHit, findUserByPhone, listTeam, searchUsers } from '../../lib/api';
 import { friendly } from '../../lib/errors';
 import { WIDE } from '../../lib/layout';
+import { Country, countries, toE164 } from '../../lib/phone';
 import { useAuth } from '../../state/AuthProvider';
 import { useSpace } from '../../state/SpaceProvider';
 import { useTheme } from '../../theme/ThemeProvider';
 import { font } from '../../theme/tokens';
-import { Chip, Field, Icon, Pressy, Sheet, Txt, useToast, Button } from '../../ui';
+import { Avatar, Chip, Field, Icon, Pressy, Sheet, Txt, useToast, Button } from '../../ui';
 import { loc, t } from '../../i18n';
 
 const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -41,6 +42,9 @@ export default function Agenda() {
   const [refreshing, setRefreshing] = useState(false);
   const [open, setOpen] = useState<Appointment | null>(null);
   const [creating, setCreating] = useState(false);
+  const { customer: presetCustomer } = useLocalSearchParams<{ customer?: string }>();
+  // Coming from a client card ("Agendar cita"): open the form with that customer already chosen.
+  useEffect(() => { if (presetCustomer && active) setCreating(true); }, [presetCustomer, active?.business.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const bid = active?.business.id;
   const canWrite = active?.role !== 'viewer';
   const grid = useMemo(() => monthGrid(anchor), [anchor]);
@@ -89,7 +93,7 @@ export default function Agenda() {
             <Pressy key={d.toISOString()} onPress={() => setSelected(startOfDay(d))} accessibilityRole="button" accessibilityLabel={t('{day}, {n} citas', { day: longDay(d), n: list.length })} scale={0.96}
               style={{ width: `${100 / 7}%`, aspectRatio: wide ? 1.25 : width >= 700 ? 1.9 : 1, padding: 4, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: isSel ? c.accentSoft : 'transparent' }}>
               <View style={{ alignSelf: 'flex-start', minWidth: 24, height: 24, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: isToday ? c.highlight : 'transparent' }}>
-                <Txt style={{ fontSize: 13, lineHeight: 16, fontFamily: isToday || isSel ? font.bold : font.medium, color: isToday ? '#16160F' : inMonth ? c.text : c.textFaint }}>{d.getDate()}</Txt>
+                <Txt style={{ fontSize: 13, lineHeight: 16, fontFamily: isToday || isSel ? font.bold : font.medium, color: isToday ? c.highlightText : inMonth ? c.text : c.textFaint }}>{d.getDate()}</Txt>
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
                 {list.slice(0, 4).map((a) => <View key={a.id} style={{ width: 6, height: 6, borderRadius: 1.5, backgroundColor: apptMeta[a.status].color }} />)}
@@ -121,7 +125,7 @@ export default function Agenda() {
           <View style={{ flex: 1, paddingVertical: 12, paddingRight: 12, gap: 4 }}>
             <Txt v="bodyStrong" numberOfLines={1}>{a.title}</Txt>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Pill label={apptMeta[a.status].label} color={apptMeta[a.status].color} />
+              <Pill label={apptLabel(a)} color={isPendingInvite(a) ? '#E8890C' : apptMeta[a.status].color} />
               {nameOf(a) && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Icon name="person" size={12} tone="faint" /><Txt v="caption" tone="muted">{nameOf(a)}</Txt></View>}
             </View>
           </View>
@@ -149,16 +153,17 @@ export default function Agenda() {
         {wide ? <View style={{ flexDirection: 'row', gap: 18, alignItems: 'flex-start' }}><View style={{ flex: 3 }}>{calendar}</View><View style={{ flex: 2 }}>{agenda}</View></View> : <>{calendar}{agenda}</>}
       </ScrollView>
 
-      <NewAppointment visible={creating} onClose={() => setCreating(false)} bid={active.business.id} customers={customers} team={team} me={user?.id ?? ''} day={selected} onDone={() => { setCreating(false); load(); }} />
+      <NewAppointment visible={creating} onClose={() => setCreating(false)} bid={active.business.id} customers={customers} team={team} me={user?.id ?? ''} day={selected} presetCustomer={presetCustomer} onDone={() => { setCreating(false); load(); }} />
 
       <Sheet visible={!!open} onClose={() => setOpen(null)} title={open?.title}>
         {open && (
           <View style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <Pill label={apptMeta[open.status].label} color={apptMeta[open.status].color} />
+              <Pill label={apptLabel(open)} color={isPendingInvite(open) ? '#E8890C' : apptMeta[open.status].color} />
               <Txt v="small" tone="muted">{new Date(open.starts_at).toLocaleString(loc(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} – {hm(open.ends_at)}</Txt>
             </View>
             {nameOf(open) && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name="person" size={16} tone="accent" /><Txt>{nameOf(open)}</Txt></View>}
+            {isPendingInvite(open) && <Txt v="small" tone="muted">Le llegó la invitación a su chat. En cuanto la acepte pasará a «Confirmada» y la verá en su agenda.</Txt>}
             {open.notes ? <Txt tone="muted">{open.notes}</Txt> : null}
             {canWrite && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -191,23 +196,91 @@ function Reschedule({ appt, onDone }: { appt: Appointment; onDone: () => void })
   );
 }
 
-function NewAppointment({ visible, onClose, bid, customers, team, me, day, onDone }: { visible: boolean; onClose: () => void; bid: string; customers: Customer[]; team: TeamMember[]; me: string; day: Date; onDone: () => void }) {
+type Invitee = { id: string; name: string; sub: string; avatar?: string | null };
+
+/** Finds a CIFRA account (person or business owner) by @username or phone to invite it to the appointment. */
+function InviteSearch({ value, onChange }: { value: Invitee | null; onChange: (v: Invitee | null) => void }) {
+  const { c, r } = useTheme();
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<Invitee[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [country] = useState<Country>(countries[0]);
+  const seq = useRef(0);
+  useEffect(() => {
+    const mine = ++seq.current;
+    const s = q.trim().replace(/^@/, '');
+    if (s.length < 2) { setHits([]); setBusy(false); return; }
+    setBusy(true);
+    const tm = setTimeout(async () => {
+      try {
+        let out: Invitee[] = [];
+        if (/^[+\d][\d\s().-]{5,}$/.test(s)) {
+          const p = toE164(country, s);
+          if (p.ok) out = (await findUserByPhone(p.e164)).filter((x) => !x.is_self).map((x) => ({ id: x.id, name: x.display_name, sub: p.e164, avatar: x.avatar_path }));
+        } else if (/^[A-Za-z0-9_]{2,32}$/.test(s)) {
+          out = (await searchUsers(s)).filter((x: UserHit) => !x.is_self).map((x) => ({ id: x.id, name: x.display_name, sub: `@${x.username}`, avatar: x.avatar_path }));
+        }
+        if (mine === seq.current) setHits(out);
+      } catch { if (mine === seq.current) setHits([]); } finally { if (mine === seq.current) setBusy(false); }
+    }, 300);
+    return () => clearTimeout(tm);
+  }, [q, country]);
+  if (value) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: r(12), backgroundColor: c.accentSoft }}>
+        <Avatar name={value.name} seed={value.id} path={value.avatar} size={36} />
+        <View style={{ flex: 1 }}><Txt v="smallStrong" style={{ color: c.accentSoftText }}>{value.name}</Txt><Txt v="caption" style={{ color: c.accentSoftText }}>{t('{sub} · recibirá la invitación en su chat', { sub: value.sub })}</Txt></View>
+        <Pressy onPress={() => onChange(null)} accessibilityRole="button" accessibilityLabel="Quitar invitado" scale={0.9}><Icon name="close-circle" size={20} color={c.accentSoftText} /></Pressy>
+      </View>
+    );
+  }
+  return (
+    <View style={{ gap: 6 }}>
+      <Field value={q} onChangeText={setQ} placeholder="@usuario o número de teléfono" icon="at" autoCapitalize="none" autoCorrect={false} right={busy ? <ActivityIndicator color={c.accent} /> : undefined} />
+      {hits.map((h) => (
+        <Pressy key={h.id} onPress={() => { onChange(h); setQ(''); setHits([]); }} accessibilityRole="button" scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: r(12), borderWidth: 1, borderColor: c.border, backgroundColor: c.surface }}>
+          <Avatar name={h.name} seed={h.id} path={h.avatar} size={34} />
+          <View style={{ flex: 1 }}><Txt v="smallStrong" numberOfLines={1}>{h.name}</Txt><Txt v="caption" tone="muted">{h.sub}</Txt></View>
+          <Icon name="add-circle" size={20} tone="accent" />
+        </Pressy>
+      ))}
+      {!busy && q.trim().length >= 2 && hits.length === 0 && <Txt v="caption" tone="faint">Nadie con ese @usuario o número en CIFRA.</Txt>}
+    </View>
+  );
+}
+
+function NewAppointment({ visible, onClose, bid, customers, team, me, day, presetCustomer, onDone }: { visible: boolean; onClose: () => void; bid: string; customers: Customer[]; team: TeamMember[]; me: string; day: Date; presetCustomer?: string; onDone: () => void }) {
   const toast = useToast();
   const [title, setTitle] = useState('');
   const [cust, setCust] = useState<string | null>(null);
+  const [invite, setInvite] = useState<Invitee | null>(null);
+  const [withWho, setWithWho] = useState<'none' | 'customer' | 'invite'>('none');
   const [q, setQ] = useState('');
   const [slot, setSlot] = useState<Date | null>(null);
   const [mins, setMins] = useState(30);
   const [notes, setNotes] = useState('');
   const [who, setWho] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (visible) { setTitle(''); setCust(null); setQ(''); setMins(30); setNotes(''); setWho(null); const d = new Date(day); d.setHours(Math.max(9, new Date().getHours() + 1), 0, 0, 0); setSlot(d.getTime() < Date.now() ? null : d); } }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!visible) return;
+    setTitle(''); setQ(''); setMins(30); setNotes(''); setWho(null); setInvite(null);
+    const preset = presetCustomer && customers.some((x) => x.id === presetCustomer) ? presetCustomer : null;
+    setCust(preset); setWithWho(preset ? 'customer' : 'none');
+    const d = new Date(day); d.setHours(Math.max(9, new Date().getHours() + 1), 0, 0, 0); setSlot(d.getTime() < Date.now() ? null : d);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = customers.filter((x) => !q.trim() || x.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6);
   const save = async () => {
     if (!slot || !title.trim()) return;
     setBusy(true);
-    try { await createAppointment({ business: bid, customer: cust, title, start: slot, end: new Date(slot.getTime() + mins * 60000), notes, assigned: who }); toast.show(cust && customers.find((x) => x.id === cust)?.user_id ? 'Cita agendada · el cliente la verá en su chat' : 'Cita agendada', 'success'); onDone(); }
-    catch (e) { toast.show(/appointment_overlap/.test(String((e as Error).message)) ? 'Esa persona ya tiene una cita a esa hora.' : friendly(e, 'No se pudo agendar.'), 'error'); } finally { setBusy(false); }
+    try {
+      const customer = withWho === 'customer' ? cust : null;
+      const user = withWho === 'invite' ? invite?.id ?? null : null;
+      await createAppointment({ business: bid, customer, user, title, start: slot, end: new Date(slot.getTime() + mins * 60000), notes, assigned: who });
+      toast.show(user || (customer && customers.find((x) => x.id === customer)?.user_id) ? 'Invitación enviada · la verá en su chat y podrá aceptarla' : 'Cita agendada', 'success'); onDone();
+    } catch (e) {
+      const msg = String((e as Error).message);
+      toast.show(/appointment_overlap/.test(msg) ? 'Esa persona ya tiene una cita a esa hora.' : /customer_is_team/.test(msg) ? 'Esa persona es de tu equipo: asígnale la cita en «Atiende».' : friendly(e, 'No se pudo agendar.'), 'error');
+    } finally { setBusy(false); }
   };
   return (
     <Sheet visible={visible} onClose={onClose} title="Nueva cita">
@@ -217,12 +290,22 @@ function NewAppointment({ visible, onClose, bid, customers, team, me, day, onDon
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{QUICK_TITLES.map((t) => <Chip key={t} label={t} active={title === t} onPress={() => setTitle(t)} />)}</ScrollView>
         </View>
         <View style={{ gap: 8 }}>
-          <Txt v="caption" tone="muted">Cliente (opcional) · se le avisa por el chat</Txt>
-          <Field value={q} onChangeText={setQ} placeholder="Buscar cliente" icon="search" />
+          <Txt v="caption" tone="muted">¿Con quién? · recibe la invitación en su chat y la acepta con un toque</Txt>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <Chip label="Sin cliente" active={cust === null} onPress={() => setCust(null)} />
-            {shown.map((x) => <Chip key={x.id} label={x.name} icon={x.user_id ? 'chatbubble' : 'person'} active={cust === x.id} onPress={() => setCust(x.id)} />)}
+            <Chip label="Sin cliente" active={withWho === 'none'} onPress={() => setWithWho('none')} />
+            <Chip label="Un cliente" icon="people" active={withWho === 'customer'} onPress={() => setWithWho('customer')} />
+            <Chip label="Invitar a alguien de CIFRA" icon="at" active={withWho === 'invite'} onPress={() => setWithWho('invite')} />
           </View>
+          {withWho === 'customer' && (
+            <>
+              <Field value={q} onChangeText={setQ} placeholder="Buscar cliente" icon="search" />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {shown.map((x) => <Chip key={x.id} label={x.name} icon={x.user_id ? 'chatbubble' : 'person'} active={cust === x.id} onPress={() => setCust(x.id)} />)}
+                {shown.length === 0 && <Txt v="caption" tone="faint">Ningún cliente con ese nombre.</Txt>}
+              </View>
+            </>
+          )}
+          {withWho === 'invite' && <InviteSearch value={invite} onChange={setInvite} />}
         </View>
         <View style={{ gap: 8 }}><Txt v="caption" tone="muted">Día y hora</Txt><SlotPicker value={slot} onChange={setSlot} /></View>
         <View style={{ gap: 8 }}><Txt v="caption" tone="muted">Duración</Txt><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{DURATIONS.map((m) => <Chip key={m} label={m >= 60 ? t('{n} h', { n: m / 60 === Math.floor(m / 60) ? m / 60 : (m / 60).toFixed(1) }) : t('{n} min', { n: m })} active={mins === m} onPress={() => setMins(m)} />)}</View></View>
@@ -230,7 +313,7 @@ function NewAppointment({ visible, onClose, bid, customers, team, me, day, onDon
           <View style={{ gap: 8 }}><Txt v="caption" tone="muted">Atiende</Txt><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}><Chip label="Cualquiera" active={who === null} onPress={() => setWho(null)} />{team.filter((t) => t.role !== 'viewer').map((t) => <Chip key={t.user_id} label={t.user_id === me ? 'Yo' : t.display_name} active={who === t.user_id} onPress={() => setWho(t.user_id)} />)}</View></View>
         )}
         <Field label="Notas (opcional)" value={notes} onChangeText={setNotes} multiline maxLength={300} />
-        <Button title={slot ? t('Agendar · {when}', { when: slot.toLocaleString(loc(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }) : 'Elige día y hora'} disabled={!slot || !title.trim()} loading={busy} onPress={save} />
+        <Button title={slot ? t(withWho === 'invite' ? 'Invitar · {when}' : 'Agendar · {when}', { when: slot.toLocaleString(loc(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }) : 'Elige día y hora'} disabled={!slot || !title.trim() || (withWho === 'invite' && !invite) || (withWho === 'customer' && !cust)} loading={busy} onPress={save} />
       </View>
     </Sheet>
   );

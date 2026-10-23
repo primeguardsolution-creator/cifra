@@ -27,8 +27,8 @@ export function Key({ icon, label, onPress, primary, small }: { icon?: IconName;
   return (
     <Pressy onPress={onPress} accessibilityRole="button" accessibilityLabel={label ?? icon} scale={0.95}
       style={{ height: small ? 34 : 40, minWidth: small ? 34 : 40, paddingHorizontal: label ? 13 : 0, borderRadius: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: primary ? c.highlight : c.sunken, borderWidth: 1, borderColor: primary ? c.highlight : c.border }}>
-      {icon && <Icon name={icon} size={small ? 15 : 18} color={primary ? '#16160F' : c.text} />}
-      {label && <Txt v="smallStrong" style={{ color: primary ? '#16160F' : c.text }}>{label}</Txt>}
+      {icon && <Icon name={icon} size={small ? 15 : 18} color={primary ? c.highlightText : c.text} />}
+      {label && <Txt v="smallStrong" style={{ color: primary ? c.highlightText : c.text }}>{label}</Txt>}
     </Pressy>
   );
 }
@@ -46,7 +46,7 @@ export function NoBusiness({ onCreate }: { onCreate: () => void }) {
   const { c } = useTheme();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, gap: 12, backgroundColor: c.bg }}>
-      <View style={{ width: 72, height: 72, borderRadius: 14, backgroundColor: c.highlight, alignItems: 'center', justifyContent: 'center' }}><Icon name="storefront" size={34} color="#16160F" /></View>
+      <View style={{ width: 72, height: 72, borderRadius: 14, backgroundColor: c.highlight, alignItems: 'center', justifyContent: 'center' }}><Icon name="storefront" size={34} color={c.highlightText} /></View>
       <Txt v="h2" style={{ textAlign: 'center' }}>Primero, crea tu negocio</Txt>
       <Txt tone="muted" style={{ textAlign: 'center', maxWidth: 340 }}>Con tu negocio tendrás agenda, clientes y a Doer trabajando para ti.</Txt>
       <Key primary icon="add" label="Crear mi negocio" onPress={onCreate} />

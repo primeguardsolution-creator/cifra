@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Business, ContactRow, PersonCard, createGroup, findUserByPhone, findUserByUsername, listContacts, saveContact, searchBusinesses, startDirectChat } from '../../lib/api';
+import { Business, ContactRow, PersonCard, UserHit, createGroup, findUserByPhone, findUserByUsername, listContacts, saveContact, searchBusinesses, searchUsers, startDirectChat } from '../../lib/api';
 import { friendly } from '../../lib/errors';
 import { Country, countries, flag, formatPhone, toE164 } from '../../lib/phone';
 import { appUrl, inviteMessage, shareText } from '../../lib/share';
@@ -20,7 +20,7 @@ export default function NewChat() {
   const { c } = useTheme();
   const toast = useToast();
   const { user } = useAuth();
-  const { q: presetQ } = useLocalSearchParams<{ q?: string }>();
+  const { q: presetQ, mode: presetMode } = useLocalSearchParams<{ q?: string; mode?: string }>();
   const [tab, setTab] = useState<Tab>('phone');
   const [contacts, setContacts] = useState<ContactRow[]>([]);
 
@@ -44,7 +44,7 @@ export default function NewChat() {
                 </Pressy>
               ))}
             </View>
-            {tab === 'phone' && <ByPhone presetQ={presetQ} contacts={contacts} myId={user?.id ?? ''} onSaved={(r) => setContacts((x) => [...x.filter((y) => y.contact_user_id !== r.contact_user_id), r])} toast={toast.show} />}
+            {tab === 'phone' && <ByPhone presetQ={presetQ} presetMode={presetMode === 'user' ? 'user' : undefined} contacts={contacts} myId={user?.id ?? ''} onSaved={(r) => setContacts((x) => [...x.filter((y) => y.contact_user_id !== r.contact_user_id), r])} toast={toast.show} />}
             {tab === 'group' && <NewGroup contacts={contacts} toast={toast.show} />}
             {tab === 'business' && <FindBusiness />}
           </View>
@@ -54,7 +54,7 @@ export default function NewChat() {
   );
 }
 
-function ByPhone({ presetQ, contacts, myId, onSaved, toast }: { presetQ?: string; contacts: ContactRow[]; myId: string; onSaved: (c: ContactRow) => void; toast: (m: string, k?: 'info' | 'success' | 'error') => void }) {
+function ByPhone({ presetQ, presetMode, contacts, myId, onSaved, toast }: { presetQ?: string; presetMode?: 'user'; contacts: ContactRow[]; myId: string; onSaved: (c: ContactRow) => void; toast: (m: string, k?: 'info' | 'success' | 'error') => void }) {
   const { c } = useTheme();
   const [country, setCountry] = useState<Country>(countries[0]);
   const [pick, setPick] = useState(false);
@@ -64,13 +64,16 @@ function ByPhone({ presetQ, contacts, myId, onSaved, toast }: { presetQ?: string
   const [result, setResult] = useState<(PersonCard & { is_self: boolean }) | 'none' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lookedUp, setLookedUp] = useState<string>('');
-  const [mode, setMode] = useState<'phone' | 'user'>(presetQ ? 'user' : 'phone');
+  const [mode, setMode] = useState<'phone' | 'user'>(presetQ || presetMode === 'user' ? 'user' : 'phone');
   const [handle, setHandle] = useState((presetQ ?? '').replace(/^@/, '').replace(/[^A-Za-z0-9_-]/g, ''));
   const [botHit, setBotHit] = useState(false);
   const [bizHits, setBizHits] = useState<Awaited<ReturnType<typeof searchBusinesses>>>([]);
+  const [more, setMore] = useState<UserHit[]>([]);
+  const [saved, setSaved] = useState<Set<string>>(new Set());
+  const isContact = (id: string) => saved.has(id) || contacts.some((x) => x.contact_user_id === id);
 
   const search = async () => {
-    setError(null); setResult(null); setBotHit(false); setBizHits([]);
+    setError(null); setResult(null); setBotHit(false); setBizHits([]); setMore([]);
     if (mode === 'user') {
       const u = handle.trim().replace(/^@/, '');
       if (!/^[A-Za-z0-9_-]{2,48}$/.test(u)) return setError('Escribe el @usuario de una persona o el @identificador de un negocio.');
@@ -78,10 +81,15 @@ function ByPhone({ presetQ, contacts, myId, onSaved, toast }: { presetQ?: string
       setBusy(true);
       try {
         // People and businesses share the @ search: a normal account can find any public business by its handle, contact or not.
-        const [people, shops] = await Promise.all([/^[A-Za-z0-9_]{3,32}$/.test(u) ? findUserByUsername(u) : Promise.resolve([]), searchBusinesses(u)]);
+        // The exact @username comes first; accounts that start with what was typed are listed below it.
+        const [people, shops, prefix] = await Promise.all([
+          /^[A-Za-z0-9_]{3,32}$/.test(u) ? findUserByUsername(u) : Promise.resolve([]), searchBusinesses(u),
+          /^[A-Za-z0-9_]{2,32}$/.test(u) ? searchUsers(u).catch(() => [] as UserHit[]) : Promise.resolve([] as UserHit[]),
+        ]);
         const exact = shops.filter((b) => b.handle === u.toLowerCase());
         const shown = exact.length ? exact : shops.filter((b) => b.handle?.startsWith(u.toLowerCase())).slice(0, 4);
-        setLookedUp(''); setBizHits(shown); setResult(people[0] ?? (shown.length ? null : 'none'));
+        const rest = prefix.filter((p) => p.id !== people[0]?.id);
+        setLookedUp(''); setBizHits(shown); setMore(rest); setResult(people[0] ?? (shown.length || rest.length ? null : 'none'));
       } catch (e) { setError(friendly(e)); } finally { setBusy(false); }
       return;
     }
@@ -93,6 +101,15 @@ function ByPhone({ presetQ, contacts, myId, onSaved, toast }: { presetQ?: string
 
   useEffect(() => { if (presetQ) search(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const addContact = async (person: Pick<PersonCard, 'id' | 'display_name' | 'phone'>) => {
+    setBusy(true);
+    try {
+      await saveContact(myId, { display_name: person.display_name, phone: person.phone ?? (lookedUp || null), contact_user_id: person.id });
+      setSaved((s) => new Set(s).add(person.id));
+      listContacts().then((cs) => cs.forEach(onSaved)).catch(() => {});
+      toast(t('{name} añadido a tus contactos', { name: person.display_name }), 'success');
+    } catch (e) { toast(friendly(e), 'error'); } finally { setBusy(false); }
+  };
   const open = async (person: PersonCard) => {
     setBusy(true);
     try {
@@ -136,12 +153,33 @@ function ByPhone({ presetQ, contacts, myId, onSaved, toast }: { presetQ?: string
         <View style={{ padding: 16, borderRadius: 20, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, gap: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             <Avatar name={result.display_name} seed={result.id} path={result.avatar_path} size={56} />
-            <View style={{ flex: 1 }}><Txt v="h3" numberOfLines={1}>{result.display_name}</Txt><Txt v="small" tone="muted" numberOfLines={1}>{result.phone ? formatPhone(result.phone) : 'Número oculto'}</Txt></View>
+            <View style={{ flex: 1 }}>
+              <Txt v="h3" numberOfLines={1}>{result.display_name}</Txt>
+              <Txt v="small" tone="muted" numberOfLines={1}>{mode === 'user' ? `@${handle.trim().replace(/^@/, '').toLowerCase()}` : result.phone ? formatPhone(result.phone) : 'Número oculto'}{isContact(result.id) ? ' · En tus contactos' : ''}</Txt>
+            </View>
           </View>
-          {result.is_self ? <Txt v="small" tone="muted">Es tu propio número.</Txt> : <Button title="Chatear" icon="chatbubble" onPress={() => open(result)} loading={busy} />}
+          {result.is_self ? <Txt v="small" tone="muted">{mode === 'user' ? 'Es tu propio @usuario.' : 'Es tu propio número.'}</Txt> : (
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Button title="Chatear" icon="chatbubble" style={{ flex: 1 }} onPress={() => open(result)} loading={busy} />
+              {!isContact(result.id) && <Button title="Añadir a contactos" icon="person-add" variant="soft" style={{ flex: 1 }} disabled={busy} onPress={() => addContact(result)} />}
+            </View>
+          )}
         </View>
       )}
-      {result === 'none' && bizHits.length === 0 && (
+      {more.length > 0 && (
+        <View style={{ gap: 4 }}>
+          <Txt v="mono" tone="faint" style={{ marginLeft: 4, marginBottom: 6 }}>{result && result !== 'none' ? 'OTRAS CUENTAS QUE EMPIEZAN IGUAL' : 'CUENTAS QUE EMPIEZAN ASÍ'}</Txt>
+          {more.map((p) => (
+            <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+              <Avatar name={p.display_name} seed={p.id} path={p.avatar_path} size={44} />
+              <View style={{ flex: 1 }}><Txt v="bodyStrong" numberOfLines={1}>{p.display_name}{p.is_self ? ' (tú)' : ''}</Txt><Txt v="caption" tone="muted">@{p.username}{p.is_contact || isContact(p.id) ? ' · En tus contactos' : ''}</Txt></View>
+              {!p.is_self && !(p.is_contact || isContact(p.id)) && <IconButton icon="person-add-outline" label={t('Añadir a {name} a contactos', { name: p.display_name })} tone="accent" size={38} pop disabled={busy} onPress={() => addContact({ id: p.id, display_name: p.display_name, phone: null })} />}
+              {!p.is_self && <IconButton icon="chatbubble" label={t('Chatear con {name}', { name: p.display_name })} tone="accent" size={38} disabled={busy} onPress={() => open({ id: p.id, display_name: p.display_name, avatar_path: p.avatar_path, phone: null })} />}
+            </View>
+          ))}
+        </View>
+      )}
+      {result === 'none' && bizHits.length === 0 && more.length === 0 && (
         <View style={{ padding: 18, borderRadius: 20, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, gap: 10 }}>
           <Txt v="bodyStrong">{mode === 'user' ? t('@{handle} no existe en CIFRA', { handle: handle.replace(/^@/, '') }) : t('{phone} aún no está en CIFRA', { phone: formatPhone(lookedUp) })}</Txt>
           <Txt v="small" tone="muted">Invítale a unirse y podréis chatear en cuanto cree su cuenta.</Txt>
@@ -149,7 +187,7 @@ function ByPhone({ presetQ, contacts, myId, onSaved, toast }: { presetQ?: string
         </View>
       )}
 
-      {!result && !botHit && bizHits.length === 0 && (
+      {!result && !botHit && bizHits.length === 0 && more.length === 0 && (
         <Pressy onPress={() => router.replace('/assistant')} accessibilityRole="button" accessibilityLabel="Hablar con Maestro CIFRA, el asistente" scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 12, borderRadius: 18, backgroundColor: c.accentSoft }}>
           <BotAvatar size={46} />
           <View style={{ flex: 1 }}>
@@ -160,13 +198,13 @@ function ByPhone({ presetQ, contacts, myId, onSaved, toast }: { presetQ?: string
         </Pressy>
       )}
 
-      {contacts.length > 0 && !result && !botHit && bizHits.length === 0 && (
+      {contacts.length > 0 && !result && !botHit && bizHits.length === 0 && more.length === 0 && (
         <View style={{ gap: 4, marginTop: 8 }}>
           <Txt v="mono" tone="faint" style={{ marginLeft: 4, marginBottom: 6 }}>TUS CONTACTOS</Txt>
           {contacts.filter((x) => x.contact_user_id).map((x) => (
             <Pressy key={x.id} onPress={() => open({ id: x.contact_user_id!, display_name: x.display_name, avatar_path: null, phone: x.phone })} scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 10, borderRadius: 14 }}>
               <Avatar name={x.display_name} seed={x.contact_user_id!} size={44} />
-              <View style={{ flex: 1 }}><Txt v="bodyStrong">{x.display_name}</Txt><Txt v="caption" tone="muted">{formatPhone(x.phone)}</Txt></View>
+              <View style={{ flex: 1 }}><Txt v="bodyStrong">{x.display_name}</Txt><Txt v="caption" tone="muted">{x.phone ? formatPhone(x.phone) : 'Contacto por @usuario'}</Txt></View>
             </Pressy>
           ))}
         </View>

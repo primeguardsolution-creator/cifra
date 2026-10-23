@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PhoneField } from '../../components/PhoneField';
-import { PhotoPicker } from '../../components/PhotoPicker';
+import { CoverPicker, PhotoPicker } from '../../components/PhotoPicker';
+import { publicAvatarUrl } from '../../lib/media';
+import { bizAccentOptions } from '../../theme/tokens';
 import { BusinessRole, QuickReply, TeamMember, addQuickReply, addTeamMember, deleteQuickReply, listQuickReplies, listTeam, removeTeamMember, setTeamRole, updateBusiness } from '../../lib/api';
 import { canManage, categories, roleLabel, roleRank } from '../../lib/business';
 import { friendly } from '../../lib/errors';
@@ -16,7 +18,7 @@ import { Avatar, Button, Card, Chip, Divider, EmptyState, Field, Icon, IconButto
 import { t, tr } from '../../i18n';
 
 export default function BusinessHub() {
-  const { c } = useTheme();
+  const { c, r, setBizAccent } = useTheme();
   const { user } = useAuth();
   const { active, refreshBusinesses, switchSpace } = useSpace();
   const toast = useToast();
@@ -61,6 +63,7 @@ export default function BusinessHub() {
   };
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
   const publicUrl = `${appUrl()}/b/${biz.handle ?? biz.id}`;
+  const cover = publicAvatarUrl(biz.cover_path);
   const assignable = (['admin', 'supervisor', 'agent', 'viewer'] as BusinessRole[]).filter((r) => role === 'owner' || roleRank[r] < roleRank[role ?? 'viewer']);
 
   const addMember = async () => {
@@ -79,15 +82,48 @@ export default function BusinessHub() {
               <IconButton icon="swap-horizontal" label="Cambiar a Personal" onPress={() => switchSpace('personal')} />
             </View>
 
-            <View style={{ alignItems: 'center', gap: 6, padding: 20, borderRadius: 28, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
-              {manage ? <PhotoPicker name={biz.name} seed={biz.id} path={biz.logo_path} folder={`business/${biz.id}`} business size={104} label="Cambiar logo" onChange={(p) => save({ logo_path: p }, p ? 'Logo actualizado' : 'Logo eliminado')} /> : <Avatar name={biz.name} seed={biz.id} path={biz.logo_path} size={104} business />}
-              <Txt v="h2" style={{ marginTop: 10 }}>{biz.name}</Txt>
-              <Txt v="small" tone="muted">{[biz.category, biz.handle && `@${biz.handle}`, role && roleLabel[role]].filter(Boolean).join(' · ')}</Txt>
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, alignSelf: 'stretch' }}>
-                <Button title="Ver perfil público" variant="soft" icon="eye" size="sm" style={{ flex: 1 }} onPress={() => router.push({ pathname: '/b/[id]', params: { id: biz.id } })} />
-                <Button title="Compartir" variant="soft" icon="share-social" size="sm" style={{ flex: 1 }} onPress={async () => toast.show((await shareText(t('Escríbenos por CIFRA: {name}', { name: biz.name }), publicUrl)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success')} />
+            <View style={{ borderRadius: r(28), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, overflow: 'hidden' }}>
+              <View style={{ height: 120, backgroundColor: '#101009' }}>
+                {cover ? <Image source={{ uri: cover }} resizeMode="cover" style={{ width: '100%', height: '100%' }} /> : (
+                  <>
+                    <View style={{ position: 'absolute', left: -40, right: -40, bottom: 26, height: 18, backgroundColor: c.highlight, transform: [{ rotate: '-4deg' }] }} />
+                    <View style={{ position: 'absolute', left: -40, right: -40, bottom: 10, height: 6, backgroundColor: 'rgba(255,255,255,0.14)', transform: [{ rotate: '-4deg' }] }} />
+                  </>
+                )}
+                {manage && <View style={{ position: 'absolute', right: 10, bottom: 10 }}><CoverPicker path={biz.cover_path} folder={`business/${biz.id}`} light onChange={(p) => save({ cover_path: p }, p ? 'Portada actualizada' : 'Portada eliminada')} /></View>}
+              </View>
+              <View style={{ alignItems: 'center', gap: 6, padding: 20, paddingTop: 0, marginTop: -52 }}>
+                <View style={{ padding: 4, borderRadius: 24, backgroundColor: c.surface }}>
+                  {manage ? <PhotoPicker name={biz.name} seed={biz.id} path={biz.logo_path} folder={`business/${biz.id}`} business size={104} label="Cambiar logo" onChange={(p) => save({ logo_path: p }, p ? 'Logo actualizado' : 'Logo eliminado')} /> : <Avatar name={biz.name} seed={biz.id} path={biz.logo_path} size={104} business />}
+                </View>
+                <Txt v="h2" style={{ marginTop: 6 }}>{biz.name}</Txt>
+                <Txt v="small" tone="muted">{[biz.category, biz.handle && `@${biz.handle}`, role && roleLabel[role]].filter(Boolean).join(' · ')}</Txt>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, alignSelf: 'stretch' }}>
+                  <Button title="Ver perfil público" variant="soft" icon="eye" size="sm" style={{ flex: 1 }} onPress={() => router.push({ pathname: '/b/[id]', params: { id: biz.id } })} />
+                  <Button title="Compartir" variant="soft" icon="share-social" size="sm" style={{ flex: 1 }} onPress={async () => toast.show((await shareText(t('Escríbenos por CIFRA: {name}', { name: biz.name }), publicUrl)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success')} />
+                </View>
               </View>
             </View>
+
+            <SectionLabel>Color del negocio</SectionLabel>
+            <Card>
+              <View style={{ padding: 16, gap: 12 }}>
+                <Txt v="small" tone="muted">Tiñe el espacio Business de todo el equipo: barra, botones y perfil público. Así cada negocio se distingue al instante.</Txt>
+                <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap' }}>
+                  {bizAccentOptions.map((o) => {
+                    const on = (biz.accent ?? 'amber') === o.key;
+                    return (
+                      <Pressy key={o.key} onPress={() => { if (!manage) return; setBizAccent(o.key); save({ accent: o.key }, t('Color: {name}', { name: tr(o.label) })); }} haptic accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={o.label} scale={0.85} style={{ alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 46, height: 46, borderRadius: r(14), backgroundColor: o.swatch, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 3 : 0, borderColor: c.text, shadowColor: o.swatch, shadowOpacity: on ? 0.55 : 0, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } }}>
+                          {on && <Icon name="checkmark" size={22} color="#fff" />}
+                        </View>
+                        <Txt v="caption" tone={on ? 'text' : 'muted'}>{o.label}</Txt>
+                      </Pressy>
+                    );
+                  })}
+                </View>
+              </View>
+            </Card>
 
             <SectionLabel>Perfil del negocio</SectionLabel>
             <View style={{ gap: 14 }}>
