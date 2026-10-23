@@ -15,7 +15,7 @@ const dict = new Map(rows.map((r) => [r[0].trim(), r]));
 const files = [];
 (function walk(d) { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else if (/\.tsx?$/.test(f)) files.push(p); } })(root);
 // Files whose Spanish is data for the assistant / Doer interpreters (translated in their own packs) or not UI at all.
-const skipFiles = /features\/assistant\/(knowledge|engine|packs)|features\/doer\/(actions|parse)|i18n\/|lib\/(countryAliases|push)\./;
+const skipFiles = /features\/assistant\/(knowledge|engine|packs)|features\/doer\/(actions|parse)|i18n\/|app\/\+html\.|lib\/(countryAliases|push)\./;
 const looksText = (s) => /[A-Za-zÁÉÍÓÚáéíóúñÑ¿¡]/.test(s) && (/\s/.test(s) || /[áéíóúñÁÉÍÓÚÑ¿¡]/.test(s) || /^[A-ZÁÉÍÓÚ][A-Za-záéíóúñ]+$/.test(s) || /^[A-ZÁÉÍÓÚ]{3,}$/.test(s)) && !/^[a-z0-9_\-\/.:#@]+$/.test(s) && !/^(https?:|\/|\.|#|rgba?\()/.test(s);
 const technical = [/^(INSERT|UPDATE|DELETE|SUBSCRIBED)$/, /^[A-Z]{2,5}$/, /^[a-z_]+(, [a-z_:()]+)+$/i, /gradient|<path|<rect|<circle|<svg|px\b|width=device|html, body|must be used inside|^Bearer|^payload too large|^Backspace$|^Enter$|^fmt\b|^[a-z_]+, [a-z_]+|created_at, message|role, business|^%sin respuesta|^maestro cifra asistente|^1\.5px|^0 12px|^id, /];
 const missing = new Map();

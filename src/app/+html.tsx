@@ -9,7 +9,22 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
         <meta name="theme-color" content="#F6F6FB" />
-        <meta name="description" content="CIFRA — mensajería privada con tu espacio personal y tu espacio Business, a un toque de distancia." />
+        <meta name="description" content="Private messaging for you and your business: personal chats plus a workspace with CRM, calendar and customer inbox." />
+        {/* Link previews (WhatsApp, iMessage, Slack, X...): kept in English, with an absolute image URL as scrapers require */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="CIFRA" />
+        <meta property="og:title" content="CIFRA · Private messaging for you and your business" />
+        <meta property="og:description" content="One app, two spaces: personal chats, and a workspace with CRM, calendar and customer inbox." />
+        <meta property="og:url" content="https://cifra-mensajeria.netlify.app" />
+        <meta property="og:image" content="https://cifra-mensajeria.netlify.app/og.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="CIFRA: private messaging for you and your business" />
+        <meta property="og:locale" content="en_US" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="CIFRA · Private messaging for you and your business" />
+        <meta name="twitter:description" content="One app, two spaces: personal chats, and a workspace with CRM, calendar and customer inbox." />
+        <meta name="twitter:image" content="https://cifra-mensajeria.netlify.app/og.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="CIFRA" />

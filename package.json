@@ -51,7 +51,7 @@
     "test:assistant": "node scripts/test-assistant.mjs",
     "test:doer": "node scripts/test-doer.mjs",
     "test:i18n": "node scripts/test-i18n.mjs",
-    "test:assistant-fn": "node scripts/test-assistant-function.mjs && node scripts/test-doer-function.mjs && node scripts/test-push-function.mjs",
+    "test:assistant-fn": "node scripts/test-assistant-function.mjs && node scripts/test-doer-function.mjs && node scripts/test-push-function.mjs && node scripts/test-link-preview.mjs",
     "build:web": "sh scripts/build-web.sh",
     "lint": "expo lint"
   },

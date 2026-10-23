@@ -10,6 +10,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { statusBackgrounds } from '../../theme/tokens';
 import { Button, Field, IconButton, Pressy, Sheet, SheetRow, Txt, useToast } from '../../ui';
 import { VideoThumb } from '../chat/VideoPlayer';
+import { LinkCard } from '../../components/LinkCard';
+import { firstUrl } from '../../lib/linkPreview';
 import { t, tr } from '../../i18n';
 
 type Props = {
@@ -76,6 +78,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
                 : Platform.OS === 'web' ? <VideoThumb url={file.uri} width={300} height={300} onOpen={() => {}} /> : <View style={{ padding: 20 }}><Txt tone="muted">{file.name} · {bytes(file.size)}</Txt></View>}
             </View>
             <Field label={biz ? 'Pie (opcional) · precio, oferta, enlace…' : 'Texto (opcional)'} value={caption} onChangeText={setCaption} multiline maxLength={400} placeholder={biz ? 'Nueva colección de otoño · desde 29 €' : 'Escribe algo'} />
+            {firstUrl(caption) && <LinkCard url={firstUrl(caption)!} />}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Button title="Cambiar" variant="secondary" style={{ flex: 1 }} onPress={() => setStep('choose')} />
               <Button title="Publicar" icon="send" style={{ flex: 2 }} loading={posting} onPress={() => publish(file.type.startsWith('video/') ? 'video' : 'image')} />
@@ -97,6 +100,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
               <TextInput value={text} onChangeText={setText} multiline maxLength={400} autoFocus placeholder={tr(biz ? 'Escribe una novedad para tus clientes' : 'Escribe un estado')} placeholderTextColor="rgba(255,255,255,0.6)" selectionColor="#fff" accessibilityLabel={tr('Texto del estado')}
                 style={{ color: '#fff', fontSize: 30, lineHeight: 38, textAlign: 'center', fontFamily: 'Inter_700Bold', outlineStyle: 'none' } as object} />
             </View>
+            {firstUrl(text) && <View style={{ paddingHorizontal: 20, paddingBottom: 12, maxWidth: 560, alignSelf: 'center', width: '100%' }}><LinkCard url={firstUrl(text)!} dark /></View>}
             <View style={{ paddingHorizontal: 20, maxWidth: 560, alignSelf: 'center', width: '100%' }}>
               <Button title="Publicar" variant="secondary" size="lg" icon="send" loading={posting} disabled={!text.trim()} onPress={() => publish('text')} />
             </View>

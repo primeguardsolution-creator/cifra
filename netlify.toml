@@ -27,6 +27,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/link-preview"
+  to = "/.netlify/functions/link-preview"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/doer"
   to = "/.netlify/functions/doer"
   status = 200
