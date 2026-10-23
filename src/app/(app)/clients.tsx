@@ -1,0 +1,201 @@
+import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
+import { BizHeader, Key, NoBusiness, Pill } from '../../components/BizUi';
+import { Customer, Stage, Task, addCustomer, addDays, addTask, crmSync, deleteCustomer, deleteTask, listCustomers, listTasks, setTaskDone, stages, startOfDay, updateCustomer } from '../../lib/biz';
+import { friendly } from '../../lib/errors';
+import { WIDE } from '../../lib/layout';
+import { useChats } from '../../state/ChatsProvider';
+import { useSpace } from '../../state/SpaceProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { font } from '../../theme/tokens';
+import { Avatar, Button, Chip, Field, Icon, IconName, Pressy, Sheet, Txt, useToast } from '../../ui';
+import { loc, t as T, tr } from '../../i18n';
+
+const ago = (iso: string | null) => {
+  if (!iso) return 'sin contacto';
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
+  return d <= 0 ? 'hoy' : d === 1 ? 'ayer' : T('hace {n} d', { n: d });
+};
+
+export default function Clients() {
+  const { c, r } = useTheme();
+  const { active } = useSpace();
+  const { chats } = useChats();
+  const toast = useToast();
+  const { width } = useWindowDimensions();
+  const wide = width >= WIDE;
+  const [rows, setRows] = useState<Customer[] | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [q, setQ] = useState('');
+  const [view, setView] = useState<'board' | 'list'>('board');
+  const [sel, setSel] = useState<Customer | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [taskText, setTaskText] = useState('');
+  const bid = active?.business.id;
+  const canWrite = active?.role !== 'viewer';
+
+  const load = useCallback(async () => {
+    if (!bid) return;
+    try { if (canWrite) await crmSync(bid).catch(() => {}); const [cs, ts] = await Promise.all([listCustomers(bid), listTasks(bid)]); setRows(cs); setTasks(ts); }
+    catch (e) { setRows([]); toast.show(friendly(e), 'error'); }
+  }, [bid, canWrite]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => (rows ?? []).filter((x) => !q.trim() || x.name.toLowerCase().includes(q.trim().toLowerCase()) || x.tags.some((t) => t.includes(q.trim().toLowerCase())) || (x.phone ?? '').includes(q.trim())), [rows, q]);
+  if (!active) return <NoBusiness onCreate={() => router.push('/business-create')} />;
+
+  const patch = (cu: Customer, p: Partial<Customer>) => {
+    setRows((cur) => cur?.map((x) => (x.id === cu.id ? { ...x, ...p } : x)) ?? cur);
+    setSel((s) => (s && s.id === cu.id ? { ...s, ...p } : s));
+    updateCustomer(cu.id, p as never).catch((e) => { toast.show(friendly(e), 'error'); load(); });
+  };
+  const chatFor = (cu: Customer) => chats.find((ch) => ch.peer_id && ch.peer_id === cu.user_id);
+  const openTasks = tasks.filter((t) => !t.done);
+
+  const card = (cu: Customer) => (
+    <Pressy key={cu.id} onPress={() => setSel(cu)} accessibilityRole="button" scale={0.98} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ padding: 11, gap: 7, borderRadius: r(10), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+        <Avatar name={cu.name} seed={cu.id} size={30} />
+        <View style={{ flex: 1 }}><Txt v="smallStrong" numberOfLines={1}>{cu.name}</Txt><Txt v="caption" tone="faint">{ago(cu.last_contact_at)}</Txt></View>
+        {cu.user_id && <Icon name="chatbubble-ellipses" size={14} color={c.highlight} />}
+      </View>
+      {(cu.tags.length > 0 || cu.value_minor) ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+          {cu.tags.slice(0, 3).map((t) => <View key={t} style={{ paddingHorizontal: 6, height: 20, borderRadius: 4, backgroundColor: c.sunken, justifyContent: 'center' }}><Txt style={{ fontSize: 11, lineHeight: 14, color: c.textMuted }}>#{t}</Txt></View>)}
+          {cu.value_minor ? <Txt v="caption" style={{ color: c.success, marginLeft: 'auto' }}>{(cu.value_minor / 100).toLocaleString(loc())} €</Txt> : null}
+        </View>
+      ) : null}
+    </Pressy>
+  );
+
+  const board = (
+    <ScrollView horizontal showsHorizontalScrollIndicator={wide} contentContainerStyle={{ gap: 12, padding: 16, paddingTop: 4 }}>
+      {stages.map((s) => {
+        const list = filtered.filter((x) => x.stage === s.key);
+        return (
+          <View key={s.key} style={{ width: 252, borderRadius: r(12), backgroundColor: c.sunken, padding: 8, gap: 8, alignSelf: 'flex-start' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingVertical: 2 }}>
+              <View style={{ width: 4, height: 16, borderRadius: 1, backgroundColor: s.color }} />
+              <Txt v="smallStrong" style={{ flex: 1 }}>{s.label}</Txt><Txt v="mono" tone="faint">{list.length}</Txt>
+            </View>
+            {list.map(card)}
+            {list.length === 0 && <Txt v="caption" tone="faint" style={{ textAlign: 'center', paddingVertical: 14 }}>Vacío</Txt>}
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
+
+  const list = (
+    <View style={{ padding: 16, paddingTop: 4, gap: 8 }}>
+      {filtered.map((cu) => (
+        <Pressy key={cu.id} onPress={() => setSel(cu)} accessibilityRole="button" scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: r(10), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+          <Avatar name={cu.name} seed={cu.id} size={40} />
+          <View style={{ flex: 1 }}><Txt v="bodyStrong" numberOfLines={1}>{cu.name}</Txt><Txt v="caption" tone="muted" numberOfLines={1}>{[cu.phone, cu.email].filter(Boolean).join(' · ') || ago(cu.last_contact_at)}</Txt></View>
+          <Pill label={stages.find((s) => s.key === cu.stage)!.label} color={stages.find((s) => s.key === cu.stage)!.color} />
+        </Pressy>
+      ))}
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <BizHeader eyebrow="CRM" title="Clientes" sub={rows ? T('{n} {w} · {m} tareas', { n: rows.length, w: tr(rows.length === 1 ? 'cliente' : 'clientes'), m: openTasks.length }) : undefined}
+        right={<><Key icon={view === 'board' ? 'list' : 'albums'} onPress={() => setView(view === 'board' ? 'list' : 'board')} />{canWrite && <Key primary icon="add" label="Cliente" onPress={() => setAdding(true)} />}</>} />
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={c.highlight} />} contentContainerStyle={{ paddingBottom: 30 }}>
+        <View style={{ padding: 16, paddingBottom: 10, gap: 12 }}>
+          <Field value={q} onChangeText={setQ} placeholder="Buscar por nombre, #etiqueta o teléfono" icon="search" autoCapitalize="none" style={{ paddingVertical: 9 }} />
+          <View style={{ borderRadius: r(12), borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderBottomWidth: openTasks.length || canWrite ? 1 : 0, borderBottomColor: c.border }}>
+              <Icon name="checkbox" size={17} color={c.highlight} /><Txt v="smallStrong" style={{ flex: 1 }}>Tareas pendientes</Txt><Txt v="mono" tone="faint">{openTasks.length}</Txt>
+            </View>
+            {openTasks.slice(0, 6).map((t) => {
+              const cu = rows?.find((x) => x.id === t.customer_id);
+              const overdue = t.due_at && new Date(t.due_at) < new Date();
+              return (
+                <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 9 }}>
+                  <Pressy onPress={() => { setTasks((cur) => cur.map((x) => (x.id === t.id ? { ...x, done: true } : x))); setTaskDone(t.id, true).catch(() => load()); }} accessibilityRole="checkbox" accessibilityLabel={T('Completar {title}', { title: t.title })} scale={0.85} style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: c.borderStrong }} />
+                  <View style={{ flex: 1 }}><Txt v="small" numberOfLines={1}>{t.title}</Txt>{(cu || t.due_at) && <Txt v="caption" style={{ color: overdue ? c.danger : c.textMuted }}>{[cu?.name, t.due_at && new Date(t.due_at).toLocaleDateString(loc(), { weekday: 'short', day: 'numeric', month: 'short' })].filter(Boolean).join(' · ')}</Txt>}</View>
+                  <Pressy onPress={() => { setTasks((cur) => cur.filter((x) => x.id !== t.id)); deleteTask(t.id).catch(() => load()); }} accessibilityRole="button" accessibilityLabel="Borrar tarea" scale={0.85}><Icon name="close" size={16} tone="faint" /></Pressy>
+                </View>
+              );
+            })}
+            {canWrite && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderTopWidth: openTasks.length ? 1 : 0, borderTopColor: c.border }}>
+                <View style={{ flex: 1 }}><Field value={taskText} onChangeText={setTaskText} placeholder="Nueva tarea… (Enter para añadir)" style={{ paddingVertical: 8 }} returnKeyType="done" onSubmitEditing={async () => { if (!taskText.trim() || !bid) return; try { const t = await addTask(bid, { title: taskText, due_at: addDays(startOfDay(new Date()), 1).toISOString() }); setTasks((cur) => [t, ...cur]); setTaskText(''); } catch (e) { toast.show(friendly(e), 'error'); } }} /></View>
+              </View>
+            )}
+          </View>
+        </View>
+        {rows === null ? <Txt tone="muted" style={{ textAlign: 'center', padding: 30 }}>Cargando…</Txt> : rows.length === 0 ? (
+          <View style={{ alignItems: 'center', padding: 30, gap: 10 }}><Icon name="people-outline" size={34} tone="faint" /><Txt v="h3">Aún no tienes clientes</Txt><Txt tone="muted" style={{ textAlign: 'center', maxWidth: 340 }}>Cada persona que te escriba aparecerá aquí sola. También puedes añadir clientes a mano.</Txt>{canWrite && <Key primary icon="add" label="Añadir cliente" onPress={() => setAdding(true)} />}</View>
+        ) : view === 'board' ? board : list}
+      </ScrollView>
+
+      <Sheet visible={!!sel} onClose={() => setSel(null)} title={sel?.name}>
+        {sel && (
+          <View style={{ gap: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Avatar name={sel.name} seed={sel.id} size={56} />
+              <View style={{ flex: 1 }}>{sel.phone ? <Txt>{sel.phone}</Txt> : <Txt tone="faint">Sin teléfono</Txt>}{sel.email ? <Txt v="small" tone="muted">{sel.email}</Txt> : null}<Txt v="caption" tone="faint">Último contacto: {ago(sel.last_contact_at)}</Txt></View>
+            </View>
+            <View style={{ gap: 8 }}>
+              <Txt v="mono" tone="faint">ETAPA</Txt>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{stages.map((s) => <Chip key={s.key} label={s.label} icon={s.icon as IconName} active={sel.stage === s.key} onPress={() => canWrite && patch(sel, { stage: s.key as Stage })} />)}</View>
+            </View>
+            <TagEditor customer={sel} canWrite={canWrite} onChange={(tags) => patch(sel, { tags })} />
+            <DraftField key={`v-${sel.id}`} label="Valor estimado (€)" initial={sel.value_minor != null ? String(sel.value_minor / 100) : ''} editable={canWrite} keyboardType="decimal-pad" placeholder="0" onCommit={(t) => { const n = parseFloat(t.replace(',', '.')); patch(sel, { value_minor: Number.isFinite(n) ? Math.round(n * 100) : null }); }} />
+            <DraftField key={`n-${sel.id}`} label="Notas privadas" initial={sel.notes ?? ''} editable={canWrite} multiline placeholder="Preferencias, acuerdos, lo que no quieras olvidar" maxLength={1000} onCommit={(t) => patch(sel, { notes: t.trim() || null })} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {chatFor(sel) && <Key primary icon="chatbubble" label="Abrir chat" onPress={() => { const id = chatFor(sel)!.id; setSel(null); router.push({ pathname: '/chat/[id]', params: { id } }); }} />}
+              <Key icon="calendar" label="Agendar cita" onPress={() => { setSel(null); router.push('/agenda'); }} />
+              {canWrite && <Key icon="checkbox" label="Tarea" onPress={async () => { try { const t = await addTask(bid!, { title: T('Seguimiento: {name}', { name: sel.name }), customer_id: sel.id, due_at: addDays(startOfDay(new Date()), 2).toISOString() }); setTasks((cur) => [t, ...cur]); toast.show('Tarea creada para dentro de 2 días', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />}
+              {active.role !== 'agent' && active.role !== 'viewer' && <Key icon="trash" label="Eliminar" onPress={async () => { const id = sel.id; setSel(null); try { await deleteCustomer(id); setRows((cur) => cur?.filter((x) => x.id !== id) ?? cur); } catch (e) { toast.show(friendly(e), 'error'); } }} />}
+            </View>
+          </View>
+        )}
+      </Sheet>
+
+      <NewCustomer visible={adding} onClose={() => setAdding(false)} onSave={async (v) => { try { const cu = await addCustomer(bid!, v); setRows((cur) => [cu, ...(cur ?? [])]); setAdding(false); toast.show('Cliente añadido', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />
+    </View>
+  );
+}
+
+/** Text field that saves when you leave it (not on every keystroke). */
+function DraftField({ initial, onCommit, ...props }: { initial: string; onCommit: (t: string) => void } & Omit<React.ComponentProps<typeof Field>, 'value' | 'onChangeText'>) {
+  const [t, setT] = useState(initial);
+  return <Field {...props} value={t} onChangeText={setT} onBlur={() => { if (t !== initial) onCommit(t); }} />;
+}
+
+function TagEditor({ customer, canWrite, onChange }: { customer: Customer; canWrite: boolean; onChange: (t: string[]) => void }) {
+  const { c } = useTheme();
+  const [t, setT] = useState('');
+  const add = () => { const v = t.trim().toLowerCase().replace(/[^a-z0-9áéíóúñ_-]/g, '').slice(0, 20); if (v && !customer.tags.includes(v)) onChange([...customer.tags, v]); setT(''); };
+  return (
+    <View style={{ gap: 8 }}>
+      <Txt v="mono" tone="faint">ETIQUETAS</Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        {customer.tags.map((x) => <Pressy key={x} onPress={() => canWrite && onChange(customer.tags.filter((y) => y !== x))} accessibilityLabel={T('Quitar etiqueta {tag}', { tag: x })} scale={0.94} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 26, borderRadius: 5, backgroundColor: c.accentSoft }}><Txt v="caption" style={{ color: c.accentSoftText }}>#{x}</Txt>{canWrite && <Icon name="close" size={12} color={c.accentSoftText} />}</Pressy>)}
+        {canWrite && <View style={{ minWidth: 130, flex: 1 }}><Field value={t} onChangeText={setT} placeholder="+ etiqueta (vip, mayorista…)" autoCapitalize="none" style={{ paddingVertical: 6, fontSize: 14 }} returnKeyType="done" onSubmitEditing={add} /></View>}
+      </View>
+    </View>
+  );
+}
+
+function NewCustomer({ visible, onClose, onSave }: { visible: boolean; onClose: () => void; onSave: (v: { name: string; phone?: string; email?: string; stage: Stage; notes?: string }) => void }) {
+  const [name, setName] = useState(''); const [phone, setPhone] = useState(''); const [email, setEmail] = useState(''); const [stage, setStage] = useState<Stage>('lead');
+  useEffect(() => { if (visible) { setName(''); setPhone(''); setEmail(''); setStage('lead'); } }, [visible]);
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Nuevo cliente">
+      <View style={{ gap: 12 }}>
+        <Field label="Nombre" value={name} onChangeText={setName} autoCapitalize="words" maxLength={80} />
+        <Field label="Teléfono (opcional)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="call" />
+        <Field label="Correo (opcional)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="mail" />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{stages.map((s) => <Chip key={s.key} label={s.label} active={stage === s.key} onPress={() => setStage(s.key)} />)}</View>
+        <Button title="Guardar cliente" disabled={!name.trim()} onPress={() => onSave({ name, phone, email, stage })} />
+      </View>
+    </Sheet>
+  );
+}

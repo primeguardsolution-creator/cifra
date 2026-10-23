@@ -2,5 +2,12 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  "exclude": [
+    "netlify",
+    "dist",
+    "node_modules",
+    "supabase",
+    "scripts"
+  ]
 }
