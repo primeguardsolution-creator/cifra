@@ -43,6 +43,8 @@ export async function addCustomer(businessId: string, v: { name: string; phone?:
 export async function updateCustomer(id: string, patch: Partial<Pick<Customer, 'name' | 'phone' | 'email' | 'stage' | 'tags' | 'notes' | 'value_minor'>>): Promise<Customer> {
   return unwrap<Customer>(await supabase.from('customers').update(patch).eq('id', id).select(customerCols).single());
 }
+/** Team: adds a CIFRA account (found by @username or phone) as a customer; it shares its name, photo and @username with the team. */
+export const addCustomerFromUser = (businessId: string, userId: string) => rpc<string>('add_customer_from_user', { p_business: businessId, p_user: userId });
 export async function deleteCustomer(id: string) { unwrap(await supabase.from('customers').delete().eq('id', id)); }
 
 const taskCols = 'id, business_id, customer_id, title, due_at, done, assigned_to, created_at';

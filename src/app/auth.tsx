@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { friendly } from '../lib/errors';
-import { Country, countries, flag, formatPhone, toE164 } from '../lib/phone';
+import { Country, countries, countryMatches, countryName, flag, formatPhone, toE164 } from '../lib/phone';
 import { useAuth } from '../state/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { radius } from '../theme/tokens';
@@ -38,8 +38,7 @@ export default function Auth() {
   useEffect(() => { if (cooldown <= 0) return; const t = setTimeout(() => setCooldown(cooldown - 1), 1000); return () => clearTimeout(t); }, [cooldown]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase().replace('+', '');
-    return q ? countries.filter((x) => x.name.toLowerCase().includes(q) || x.dial.startsWith(q) || x.iso.toLowerCase() === q) : countries;
+    return query.trim() ? countries.filter((x) => countryMatches(x, query)) : countries;
   }, [query]);
 
   if (user) return <Redirect href="/chats" />;
@@ -121,7 +120,7 @@ export default function Auth() {
                 <Field
                   ref={phoneRef} label="Número de teléfono" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" placeholder="600 123 456" returnKeyType="next" onSubmitEditing={() => passRef.current?.focus()}
                   left={
-                    <Pressy onPress={() => setPickCountry(true)} accessibilityRole="button" accessibilityLabel={t('País: {name}', { name: tr(country.name) })} scale={0.94} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 10, borderRightWidth: 1, borderRightColor: c.border, height: 28 }}>
+                    <Pressy onPress={() => setPickCountry(true)} accessibilityRole="button" accessibilityLabel={t('País: {name}', { name: countryName(country) })} scale={0.94} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 10, borderRightWidth: 1, borderRightColor: c.border, height: 28 }}>
                       <Txt style={{ fontSize: 20 }}>{flag(country.iso)}</Txt>
                       <Txt v="bodyStrong">+{country.dial}</Txt>
                       <Icon name="chevron-down" size={14} tone="muted" />
@@ -161,7 +160,7 @@ export default function Auth() {
             <Pressy key={x.iso + x.dial} onPress={() => { setCountry(x); setPickCountry(false); setQuery(''); phoneRef.current?.focus(); }} scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 12 }}>
               <Txt style={{ fontSize: 24 }}>{flag(x.iso)}</Txt>
-              <Txt v="bodyStrong" style={{ flex: 1 }}>{x.name}</Txt>
+              <Txt v="bodyStrong" style={{ flex: 1 }}>{countryName(x)}</Txt>
               <Txt tone="muted">+{x.dial}</Txt>
               {x.iso === country.iso && <Icon name="checkmark" size={18} tone="accent" />}
             </Pressy>

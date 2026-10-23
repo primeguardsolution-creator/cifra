@@ -16,6 +16,7 @@ import { ModePreference, useTheme } from '../../theme/ThemeProvider';
 import { Avatar, Card, Divider, Icon, IconName, Pressy, SectionLabel, Sheet, SheetRow, Toggle, Txt, useToast } from '../../ui';
 import { updateMyProfile } from '../../lib/api';
 import { friendly } from '../../lib/errors';
+import { PushStatus, disablePush, enablePush, pushStatus } from '../../lib/push';
 import { pickWallpaperImage } from '../../lib/media';
 import { getLocale, getLocalePref, setLocalePref, t, tr } from '../../i18n';
 
@@ -45,18 +46,25 @@ export default function Settings() {
   const insets = useSafeAreaInsets();
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [blocked, setBlocked] = useState<PersonCard[]>([]);
-  const [notifs, setNotifs] = useState(false);
+  const [push, setPush] = useState<PushStatus>('unsupported');
+  const [pushBusy, setPushBusy] = useState(false);
   const [langSheet, setLangSheet] = useState(false);
 
-  useEffect(() => { if (Platform.OS === 'web' && typeof Notification !== 'undefined') setNotifs(Notification.permission === 'granted'); }, []);
+  useEffect(() => { if (Platform.OS === 'web') pushStatus().then(setPush).catch(() => {}); }, []);
   const openBlocked = async () => {
     setBlockedOpen(true);
     try { const ids = await listBlocked(); setBlocked(ids.length ? await getProfiles(ids) : []); } catch (e) { toast.show(friendly(e), 'error'); }
   };
-  const toggleNotifs = async () => {
-    if (typeof Notification === 'undefined') return toast.show('Tu navegador no admite notificaciones.', 'error');
-    if (Notification.permission === 'granted') return toast.show('Para desactivarlas, cambia el permiso del sitio en tu navegador.', 'info');
-    const r = await Notification.requestPermission(); setNotifs(r === 'granted');
+  const togglePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (push === 'on') { await disablePush(); toast.show('Notificaciones desactivadas en este dispositivo', 'info'); }
+      else { await enablePush(); toast.show('Notificaciones activadas: te avisaremos aunque la app esté cerrada', 'success'); }
+    } catch (e) {
+      const m = String((e as Error).message);
+      toast.show(m === 'needs_install' ? 'En iPhone: toca Compartir → «Añadir a pantalla de inicio» y abre CIFRA desde ese icono.' : m === 'denied' ? 'Las notificaciones están bloqueadas: actívalas en Ajustes del teléfono → CIFRA.' : m === 'not-configured' ? 'Las notificaciones aún no están activadas en el servidor.' : m === 'unsupported' ? 'Este navegador no admite notificaciones.' : friendly(e), m === 'needs_install' ? 'info' : 'error');
+    } finally { setPush(await pushStatus().catch(() => 'unsupported' as PushStatus)); setPushBusy(false); }
   };
   const modes: { k: ModePreference; label: string; icon: IconName }[] = [{ k: 'auto', label: 'Auto', icon: 'phone-portrait' }, { k: 'light', label: 'Claro', icon: 'sunny' }, { k: 'dark', label: 'Oscuro', icon: 'moon' }];
   const pickMyWallpaper = async () => {
@@ -160,7 +168,9 @@ export default function Settings() {
             <Divider inset={66} />
             <Row icon="calendar" title="Mis citas" sub="Invitaciones de negocios y citas aceptadas" onPress={() => router.push('/my-appointments')} />
             {lock.available && <><Divider inset={66} /><Row icon="keypad" title="Bloqueo con PIN" sub={lock.enabled ? 'Activado · se bloquea tras 1 minuto fuera de la app' : t('Protege CIFRA con un PIN de {n} dígitos', { n: PIN_DIGITS })} right={<Toggle value={lock.enabled} label="Bloqueo con PIN" onChange={(v) => { setPinError(null); setFirstPin(''); setPinSheet(v ? 'new' : 'off'); }} />} /></>}
-            {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="notifications" title="Avisos en el navegador" sub={notifs ? 'Activados cuando la pestaña está en segundo plano' : 'Recibe un aviso con mensajes nuevos'} right={<Toggle value={notifs} onChange={toggleNotifs} label="Avisos del navegador" />} /></>}
+            {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="notifications" title="Notificaciones de mensajes"
+              sub={push === 'on' ? 'Activadas: te avisan aunque la app esté cerrada' : push === 'needs-install' ? 'En iPhone, añade CIFRA a la pantalla de inicio para recibirlas' : push === 'denied' ? 'Bloqueadas en los ajustes del teléfono' : push === 'unsupported' ? 'Tu navegador no las admite' : push === 'not-configured' ? 'Pendiente de activar en el servidor' : 'Recibe un aviso con cada mensaje nuevo'}
+              right={<Toggle value={push === 'on'} onChange={togglePush} label="Notificaciones de mensajes" />} /></>}
           </Card>
 
           <SectionLabel>Acerca de</SectionLabel>

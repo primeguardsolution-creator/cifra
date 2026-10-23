@@ -2,7 +2,9 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
 import { BizHeader, Key, NoBusiness, Pill } from '../../components/BizUi';
-import { Customer, Stage, Task, addCustomer, addDays, addTask, crmSync, deleteCustomer, deleteTask, listCustomers, listTasks, setTaskDone, stages, startCustomerChat, startOfDay, updateCustomer } from '../../lib/biz';
+import { PersonSearch } from '../../components/PersonSearch';
+import { PersonCard, getProfiles } from '../../lib/api';
+import { Customer, Stage, Task, addCustomer, addCustomerFromUser, addDays, addTask, crmSync, deleteCustomer, deleteTask, listCustomers, listTasks, setTaskDone, stages, startCustomerChat, startOfDay, updateCustomer } from '../../lib/biz';
 import { friendly } from '../../lib/errors';
 import { WIDE } from '../../lib/layout';
 import { useChats } from '../../state/ChatsProvider';
@@ -33,14 +35,18 @@ export default function Clients() {
   const [refreshing, setRefreshing] = useState(false);
   const [taskText, setTaskText] = useState('');
   const [writing, setWriting] = useState<string | null>(null);
+  // Photo and @username of the customers who have a CIFRA account (the team may see them).
+  const [people, setPeople] = useState<Record<string, PersonCard>>({});
+  const loadPeople = useCallback((cs: Customer[]) => { const ids = [...new Set(cs.map((x) => x.user_id).filter((x): x is string => !!x))]; if (ids.length) getProfiles(ids).then((p) => setPeople(Object.fromEntries(p.map((x) => [x.id, x])))).catch(() => {}); }, []);
+  const avatarOf = (cu: Customer) => (cu.user_id ? people[cu.user_id]?.avatar_path ?? null : null);
   const bid = active?.business.id;
   const canWrite = active?.role !== 'viewer';
 
   const load = useCallback(async () => {
     if (!bid) return;
-    try { if (canWrite) await crmSync(bid).catch(() => {}); const [cs, ts] = await Promise.all([listCustomers(bid), listTasks(bid)]); setRows(cs); setTasks(ts); }
+    try { if (canWrite) await crmSync(bid).catch(() => {}); const [cs, ts] = await Promise.all([listCustomers(bid), listTasks(bid)]); setRows(cs); setTasks(ts); loadPeople(cs); }
     catch (e) { setRows([]); toast.show(friendly(e), 'error'); }
-  }, [bid, canWrite]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bid, canWrite, loadPeople]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => (rows ?? []).filter((x) => !q.trim() || x.name.toLowerCase().includes(q.trim().toLowerCase()) || x.tags.some((t) => t.includes(q.trim().toLowerCase())) || (x.phone ?? '').includes(q.trim())), [rows, q]);
@@ -73,7 +79,7 @@ export default function Clients() {
   const card = (cu: Customer) => (
     <Pressy key={cu.id} onPress={() => setSel(cu)} accessibilityRole="button" scale={0.98} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ padding: 11, gap: 7, borderRadius: r(10), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-        <Avatar name={cu.name} seed={cu.id} size={30} />
+        <Avatar name={cu.name} seed={cu.user_id ?? cu.id} path={avatarOf(cu)} size={30} />
         <View style={{ flex: 1 }}><Txt v="smallStrong" numberOfLines={1}>{cu.name}</Txt><Txt v="caption" tone="faint">{ago(cu.last_contact_at)}</Txt></View>
         {canChat(cu) && <IconButton icon={cu.user_id ? 'chatbubble-ellipses' : 'chatbubble-outline'} label={T('Escribir a {name}', { name: cu.name })} tone="accent" size={30} pop disabled={writing === cu.id} onPress={() => write(cu)} />}
       </View>
@@ -108,7 +114,7 @@ export default function Clients() {
     <View style={{ padding: 16, paddingTop: 4, gap: 8 }}>
       {filtered.map((cu) => (
         <Pressy key={cu.id} onPress={() => setSel(cu)} accessibilityRole="button" scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: r(10), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
-          <Avatar name={cu.name} seed={cu.id} size={40} />
+          <Avatar name={cu.name} seed={cu.user_id ?? cu.id} path={avatarOf(cu)} size={40} />
           <View style={{ flex: 1 }}><Txt v="bodyStrong" numberOfLines={1}>{cu.name}</Txt><Txt v="caption" tone="muted" numberOfLines={1}>{[cu.phone, cu.email].filter(Boolean).join(' · ') || ago(cu.last_contact_at)}</Txt></View>
           <Pill label={stages.find((s) => s.key === cu.stage)!.label} color={stages.find((s) => s.key === cu.stage)!.color} />
           {canChat(cu) && <IconButton icon="chatbubble-ellipses-outline" label={T('Escribir a {name}', { name: cu.name })} tone="accent" size={36} pop disabled={writing === cu.id} onPress={() => write(cu)} />}
@@ -155,9 +161,15 @@ export default function Clients() {
         {sel && (
           <View style={{ gap: 14 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Avatar name={sel.name} seed={sel.id} size={56} />
-              <View style={{ flex: 1 }}>{sel.phone ? <Txt>{sel.phone}</Txt> : <Txt tone="faint">Sin teléfono</Txt>}{sel.email ? <Txt v="small" tone="muted">{sel.email}</Txt> : null}<Txt v="caption" tone="faint">Último contacto: {ago(sel.last_contact_at)}</Txt></View>
+              <Pressy onPress={() => sel.user_id && router.push({ pathname: '/user/[id]', params: { id: sel.user_id } })} disabled={!sel.user_id} accessibilityRole="button" accessibilityLabel="Ver perfil" scale={0.96}><Avatar name={sel.name} seed={sel.user_id ?? sel.id} path={avatarOf(sel)} size={64} /></Pressy>
+              <View style={{ flex: 1, gap: 2 }}>
+                {sel.user_id && people[sel.user_id]?.username ? <Txt v="smallStrong" tone="accent">@{people[sel.user_id]?.username}</Txt> : <Txt v="caption" tone="faint">{sel.user_id ? 'Cuenta de CIFRA' : 'Sin cuenta de CIFRA'}</Txt>}
+                <Txt v="caption" tone="faint">Último contacto: {ago(sel.last_contact_at)}</Txt>
+              </View>
             </View>
+            <DraftField key={`nm-${sel.id}`} label="Nombre" initial={sel.name} editable={canWrite} maxLength={80} autoCapitalize="words" onCommit={(t) => t.trim() && patch(sel, { name: t.trim() })} />
+            <DraftField key={`ph-${sel.id}`} label="Teléfono" initial={sel.phone ?? ''} editable={canWrite} keyboardType="phone-pad" icon="call" placeholder="+34 600 123 456" maxLength={40} onCommit={(t) => patch(sel, { phone: t.trim() || null })} />
+            <DraftField key={`em-${sel.id}`} label="Correo" initial={sel.email ?? ''} editable={canWrite} keyboardType="email-address" autoCapitalize="none" icon="mail" maxLength={200} onCommit={(t) => patch(sel, { email: t.trim() || null })} />
             <View style={{ gap: 8 }}>
               <Txt v="mono" tone="faint">ETAPA</Txt>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{stages.map((s) => <Chip key={s.key} label={s.label} icon={s.icon as IconName} active={sel.stage === s.key} onPress={() => canWrite && patch(sel, { stage: s.key as Stage })} />)}</View>
@@ -175,7 +187,16 @@ export default function Clients() {
         )}
       </Sheet>
 
-      <NewCustomer visible={adding} onClose={() => setAdding(false)} onSave={async (v) => { try { const cu = await addCustomer(bid!, v); setRows((cur) => [cu, ...(cur ?? [])]); setAdding(false); toast.show('Cliente añadido', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />
+      <AddCustomer visible={adding} onClose={() => setAdding(false)} exclude={(rows ?? []).map((x) => x.user_id).filter((x): x is string => !!x)}
+        onPickUser={async (p) => {
+          try {
+            const id = await addCustomerFromUser(bid!, p.id); setAdding(false);
+            const cs = await listCustomers(bid!); setRows(cs); loadPeople(cs);
+            const cu = cs.find((x) => x.id === id); if (cu) setSel(cu); // straight to the card, so the contact can be completed
+            toast.show(T('{name} añadido a tus clientes', { name: p.name }), 'success');
+          } catch (e) { toast.show(/customer_is_team/.test(String((e as Error).message)) ? 'Esa persona es de tu equipo.' : friendly(e), 'error'); }
+        }}
+        onSave={async (v) => { try { const cu = await addCustomer(bid!, v); setRows((cur) => [cu, ...(cur ?? [])]); setAdding(false); setSel(cu); toast.show('Cliente añadido', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />
     </View>
   );
 }
@@ -201,11 +222,22 @@ function TagEditor({ customer, canWrite, onChange }: { customer: Customer; canWr
   );
 }
 
-function NewCustomer({ visible, onClose, onSave }: { visible: boolean; onClose: () => void; onSave: (v: { name: string; phone?: string; email?: string; stage: Stage; notes?: string }) => void }) {
+function AddCustomer({ visible, onClose, onSave, onPickUser, exclude }: { visible: boolean; onClose: () => void; onSave: (v: { name: string; phone?: string; email?: string; stage: Stage; notes?: string }) => void; onPickUser: (p: { id: string; name: string }) => void; exclude: string[] }) {
+  const [tab, setTab] = useState<'search' | 'manual'>('search');
   const [name, setName] = useState(''); const [phone, setPhone] = useState(''); const [email, setEmail] = useState(''); const [stage, setStage] = useState<Stage>('lead');
-  useEffect(() => { if (visible) { setName(''); setPhone(''); setEmail(''); setStage('lead'); } }, [visible]);
+  useEffect(() => { if (visible) { setTab('search'); setName(''); setPhone(''); setEmail(''); setStage('lead'); } }, [visible]);
   return (
     <Sheet visible={visible} onClose={onClose} title="Nuevo cliente">
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+        <Chip label="Buscar en CIFRA" icon="at" active={tab === 'search'} onPress={() => setTab('search')} />
+        <Chip label="A mano" icon="create" active={tab === 'manual'} onPress={() => setTab('manual')} />
+      </View>
+      {tab === 'search' ? (
+        <View style={{ gap: 10 }}>
+          <Txt v="small" tone="muted">Busca por @usuario o por teléfono: se añade con su nombre y su foto, y después puedes editar sus datos.</Txt>
+          <PersonSearch autoFocus exclude={exclude} onPick={onPickUser} />
+        </View>
+      ) : (
       <View style={{ gap: 12 }}>
         <Field label="Nombre" value={name} onChangeText={setName} autoCapitalize="words" maxLength={80} />
         <Field label="Teléfono (opcional)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon="call" />
@@ -213,6 +245,7 @@ function NewCustomer({ visible, onClose, onSave }: { visible: boolean; onClose: 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{stages.map((s) => <Chip key={s.key} label={s.label} active={stage === s.key} onPress={() => setStage(s.key)} />)}</View>
         <Button title="Guardar cliente" disabled={!name.trim()} onPress={() => onSave({ name, phone, email, stage })} />
       </View>
+      )}
     </Sheet>
   );
 }

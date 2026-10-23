@@ -19,6 +19,8 @@ export type Chat = {
   incognito: boolean; expires_at: string | null; destroy_mine: boolean; destroy_peer: boolean;
   /** Receipts for the last message when I sent it: delivered to the other device / read by them. */
   last_delivered: boolean; last_read: boolean;
+  /** Who wrote the last message (a business shows its own name for automated replies): name and photo for the list preview. */
+  last_sender_name: string | null; last_sender_avatar: string | null;
 };
 
 export type Message = {

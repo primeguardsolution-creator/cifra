@@ -98,3 +98,9 @@ Llamadas de grupo, notificaciones push nativas (y llamadas con la app cerrada), 
 ## Languages
 
 CIFRA ships in Spanish, English and German (`src/i18n`). The language follows the device/browser setting: Spanish -> Spanish, German -> German, anything else -> English. It can be overridden in Settings -> Language. Spanish source strings are the keys of `src/i18n/dict.ts` ([es, en, de] rows); `npm run test:i18n` fails if a string used in the UI has no translation. The assistant (@maestro) and Doer have per-language packs/interpreters.
+
+## Migración 11 · notificaciones push, saludo automático y clientes
+
+- `20261029_000011_greeting_push.sql`: el saludo automático de Business solo sale si el negocio no escribió antes al contacto; `list_chats` devuelve `last_sender_name/avatar`; tabla `push_subscriptions` + RPC `save_push_subscription`/`delete_push_subscription`; `push_payloads` y trigger `messages_notify_push` (pg_net → `/api/push`); `add_customer_from_user`.
+- Push (iOS 16.4+ solo con la PWA añadida a la pantalla de inicio): variables Netlify `EXPO_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `PUSH_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; en Supabase habilitar `pg_net` y rellenar `push_config` (`url`, `token`).
+- Búsqueda de país multilingüe (es/en/de + alias) y búsqueda de clientes por @usuario/teléfono en Business.
