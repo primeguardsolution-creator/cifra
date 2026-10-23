@@ -70,6 +70,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     document.documentElement.style.backgroundColor = c.bg;
+    document.body.style.backgroundColor = c.bg; // the status-bar area shows the body colour, never a dark default
     document.documentElement.style.colorScheme = mode;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', c.bg);
   }, [c.bg, mode]);

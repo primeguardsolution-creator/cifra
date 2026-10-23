@@ -13,13 +13,16 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="CIFRA" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/* The app paints the top safe area itself (every header pads by the inset), so the iOS status bar must be fully
+            transparent: "default" draws a dark frosted band over the first row of content in the installed PWA. */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: `
-          html, body, #root { height: 100%; }
+          html, body, #root { height: 100%; background: #F6F6FB; }
+          @media (prefers-color-scheme: dark) { html, body, #root { background: #000; } }
           body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
           * { scrollbar-width: thin; }
           textarea, input { outline: none; }
