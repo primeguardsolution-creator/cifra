@@ -99,6 +99,14 @@ export async function pickChatMedia(): Promise<Picked | null> {
   return asset.type.startsWith('image/') ? processWebImage(asset, { max: 1800 }) : asset;
 }
 
+/** A video for a status / business post (up to the 25 MB upload limit; the picker reports the duration when it can). */
+export async function pickVideo(): Promise<Picked | null> {
+  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 0.85, videoMaxDuration: 90 });
+  if (res.canceled || !res.assets[0]) return null;
+  const a = res.assets[0];
+  return { ...fromAsset(a), durationMs: a.duration ?? undefined };
+}
+
 export async function takePhoto(): Promise<Picked | null> {
   const perm = await ImagePicker.requestCameraPermissionsAsync();
   if (!perm.granted) throw new Error('Permite el acceso a la cámara para hacer fotos.');
