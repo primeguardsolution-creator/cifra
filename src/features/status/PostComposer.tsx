@@ -31,7 +31,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
   const { r } = useTheme();
   const toast = useToast();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState<'choose' | 'text' | 'media'>('choose');
+  const [step, setStep] = useState<'choose' | 'text' | 'media' | 'prep'>('choose');
   const [text, setText] = useState('');
   const [bg, setBg] = useState(0);
   const [file, setFile] = useState<Picked | null>(null);
@@ -49,7 +49,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
       if (kind === 'video' && Platform.OS === 'web' && canPrepVideo()) {
         // too long / too heavy / full HD: trim and compress it first (see VideoPrep)
         const info = await probeVideo(f.uri, f.size ?? 0).catch(() => null);
-        if (info && needsPrep(info)) { setPrep({ file: f, info }); return; }
+        if (info && needsPrep(info)) { setPrep({ file: f, info }); setStep('prep'); return; }
       }
       if (kind === 'video' && (f.size ?? 0) > 25 * 1024 * 1024) return toast.show('El vídeo supera los 25 MB. Recórtalo o elige otro.', 'error');
       setFile(f); setStep('media');
@@ -78,7 +78,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
         <SheetRow icon="videocam" label="Vídeo" sub="Hasta 90 segundos · se recorta y comprime si hace falta" onPress={() => pick('video')} />
       </Sheet>
 
-      <VideoPrep visible={visible && !!prep} file={prep?.file ?? null} info={prep?.info ?? null} onClose={() => setPrep(null)} onDone={(f) => { setPrep(null); setFile(f); setStep('media'); }} />
+      <VideoPrep visible={visible && step === 'prep' && !!prep} file={prep?.file ?? null} info={prep?.info ?? null} onClose={() => { setPrep(null); setStep('choose'); }} onDone={(f) => { setPrep(null); setFile(f); setStep('media'); }} />
 
       <Sheet visible={visible && step === 'media' && !!file} onClose={() => setStep('choose')} title={file?.type.startsWith('video/') ? 'Publicar vídeo' : 'Publicar foto'}>
         {file && (

@@ -83,6 +83,8 @@ await db.exec(migration('20261029_000011_greeting_push.sql'));
 await db.exec(migration('20261029_000011_greeting_push.sql'));
 await db.exec(migration('20261030_000012_push_prefs.sql'));
 await db.exec(migration('20261030_000012_push_prefs.sql'));
+await db.exec(migration('20261031_000013_appointment_reminders.sql'));
+await db.exec(migration('20261031_000013_appointment_reminders.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -778,6 +780,34 @@ await check('Clientes: el equipo anade una cuenta de CIFRA como cliente (sin cha
   await as('cleo', async () => denied(db.query(`select public.add_customer_from_user($1, $2)`, [biz, ids.ana]), 'team member'));
   await as('cleo', () => db.query(`update public.customers set name = 'Gustavo', phone = '+34 600 000 007', email = 'gus@example.com' where id = $1`, [cid])); // edit contact
   eq((await as('cleo', () => q(`select name from public.customers where id = $1`, [cid])))[0].name, 'Gustavo');
+});
+
+await check('Recordatorio 5 min antes: creador, asignado e invitado; una sola vez; respeta Business/Personal', async () => {
+  const sub = (who, ep) => as(who, () => db.query(`select public.save_push_subscription($1, 'BPkey', 'authkey', 'iPhone')`, [ep]));
+  await sub('ben', 'https://push.example/ben2');
+  const aid = await as('cleo', async () => (await q(`select public.create_appointment($1, null, 'Revision', now() + interval '3 minutes', now() + interval '33 minutes', null, $2, $3) as id`, [biz, ids.cleo, ids.ben]))[0].id);
+  const far = await as('cleo', async () => (await q(`select public.create_appointment($1, null, 'Lejos', now() + interval '2 hours', now() + interval '3 hours', null, $2, null) as id`, [biz, ids.cleo]))[0].id);
+  eq((await q(`select public.dispatch_appointment_reminders() as n`))[0].n, 1); // only the one inside 5 minutes
+  eq((await q(`select public.dispatch_appointment_reminders() as n`))[0].n, 0); // never twice
+  eq((await q(`select reminded_at is not null as r from public.appointments where id = $1`, [aid]))[0].r, true);
+  eq((await q(`select reminded_at is null as r from public.appointments where id = $1`, [far]))[0].r, true);
+  const rows = await q(`select endpoint, title, body, url, tag from public.reminder_payloads($1) order by endpoint`, [aid]);
+  eq(rows.map((r) => [r.endpoint, r.url]), [['https://push.example/ben2', '/my-appointments'], ['https://push.example/cleo', '/agenda']]);
+  eq(rows[0].title.endsWith('Revision'), true);
+  eq(rows[0].body.startsWith('En 5 minutos'), true);
+  eq(rows[0].tag, `appt-${aid}`);
+  // Business alerts off for cleo -> only the invited customer is reminded
+  await as('cleo', () => db.query(`select public.set_push_prefs('https://push.example/cleo', true, false)`));
+  eq((await q(`select endpoint from public.reminder_payloads($1)`, [aid])).map((r) => r.endpoint), ['https://push.example/ben2']);
+  await as('cleo', () => db.query(`select public.set_push_prefs('https://push.example/cleo', true, true)`));
+  // moving the appointment re-arms the reminder; cancelled ones are never reminded
+  await q(`update public.appointments set starts_at = now() + interval '4 minutes', ends_at = now() + interval '34 minutes' where id = $1`, [aid]);
+  eq((await q(`select reminded_at is null as r from public.appointments where id = $1`, [aid]))[0].r, true);
+  await q(`update public.appointments set status = 'cancelled' where id = $1`, [aid]);
+  eq((await q(`select public.dispatch_appointment_reminders() as n`))[0].n, 0);
+  eq((await q(`select * from public.reminder_payloads($1)`, [aid])).length, 0);
+  await as('ben', async () => denied(db.query(`select * from public.reminder_payloads($1)`, [aid]), 'reminder_payloads as user'));
+  await as('ben', async () => denied(db.query(`select public.dispatch_appointment_reminders()`), 'dispatch as user'));
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);

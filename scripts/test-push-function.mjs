@@ -30,6 +30,7 @@ let pushStatus = 201; let rows = [];
 globalThis.fetch = async (url, init) => {
   url = String(url);
   if (url.startsWith('https://sb.test/rest/v1/rpc/push_payloads')) { calls.rpc.push(JSON.parse(init.body)); return new Response(JSON.stringify(rows), { status: 200 }); }
+  if (url.startsWith('https://sb.test/rest/v1/rpc/reminder_payloads')) { calls.rpc.push({ reminder: JSON.parse(init.body).p_appt }); return new Response(JSON.stringify(rows), { status: 200 }); }
   if (url.startsWith('https://sb.test/rest/v1/rpc/drop_push_endpoint')) { calls.dropped.push(JSON.parse(init.body).p_endpoint); return new Response('null', { status: 200 }); }
   if (url.startsWith('https://push.example.test/')) { calls.push.push({ url, headers: init.headers, body: Buffer.from(init.body) }); return new Response(null, { status: pushStatus }); }
   return new Response('not found', { status: 404 });
@@ -81,4 +82,12 @@ pushStatus = 500; const bad = await (await post('secret-token', { message_id: ms
 ok(bad.failed === 1 && bad.sent === 0, 'error del servicio de push → cuenta como fallo, no rompe');
 rows = []; const none = await (await post('secret-token', { message_id: msg })).json();
 ok(none.targets === 0 && none.sent === 0, 'sin destinatarios suscritos → no envía nada');
+// appointment reminder: same delivery, its own destination
+const appt = '22222222-2222-4222-8222-222222222222'; pushStatus = 201; calls.push.length = 0; calls.rpc.length = 0;
+rows = [{ ...sub, title: '\u23F0 Revision', body: 'En 5 minutos \u00B7 10:30 \u00B7 Cafe Aurora', icon_path: null, conversation_id: null, tag: 'appt-1', url: '/agenda' }];
+const rem = await (await post('secret-token', { appointment_id: appt })).json();
+ok(rem.sent === 1 && calls.rpc[0]?.reminder === appt, 'recordatorio de cita: pide reminder_payloads');
+const rp = JSON.parse(decrypt(calls.push[0].body));
+ok(rp.url === '/agenda' && rp.tag === 'appt-1' && rp.title.endsWith('Revision'), 'el recordatorio abre la agenda y lleva su propia etiqueta');
+ok((await post('secret-token', { appointment_id: 'nope' })).status === 400, 'appointment_id inválido → 400');
 process.exit(failed ? 1 : 0);

@@ -15,11 +15,19 @@ export const canPrepVideo = () => typeof document !== 'undefined' && typeof Medi
 export function probeVideo(uri: string, size = 0): Promise<VideoInfo> {
   return new Promise((resolve, reject) => {
     const v = document.createElement('video');
-    v.preload = 'auto'; v.muted = true; v.playsInline = true;
-    const release = () => { v.removeAttribute('src'); v.load(); };
-    // some containers only report their size once the first frame is decoded
-    v.onloadeddata = () => { const info = { duration: Number.isFinite(v.duration) ? v.duration : 0, width: v.videoWidth, height: v.videoHeight, size }; release(); resolve(info); };
-    v.onerror = () => { release(); reject(new Error('No se pudo leer el vídeo.')); };
+    v.preload = 'metadata'; v.muted = true; v.playsInline = true;
+    let settled = false;
+    const finish = (err?: Error) => {
+      if (settled) return; settled = true; clearTimeout(timer);
+      const info = { duration: Number.isFinite(v.duration) ? v.duration : 0, width: v.videoWidth, height: v.videoHeight, size };
+      v.removeAttribute('src'); v.load();
+      if (err || (!info.width && !info.duration)) reject(err ?? new Error('No se pudo leer el vídeo.')); else resolve(info);
+    };
+    // iPhone Safari reports the size at loadedmetadata but may never decode a frame of a detached video; some containers only know it at loadeddata
+    v.onloadedmetadata = () => { if (v.videoWidth) finish(); };
+    v.onloadeddata = () => finish();
+    v.onerror = () => finish(new Error('No se pudo leer el vídeo.'));
+    const timer = setTimeout(() => finish(), 6000); // never leave the picker hanging
     v.src = uri;
   });
 }
@@ -50,7 +58,11 @@ export async function prepareVideo(src: Picked, trim: Trim, info: VideoInfo, onP
   const seconds = Math.max(0.5, trim.end - trim.start);
   const v = document.createElement('video');
   v.src = src.uri; v.playsInline = true; v.preload = 'auto'; v.crossOrigin = 'anonymous';
-  await new Promise<void>((res, rej) => { v.onloadeddata = () => res(); v.onerror = () => rej(new Error('No se pudo leer el vídeo.')); });
+  await new Promise<void>((res, rej) => {
+    const t = setTimeout(() => rej(new Error('No se pudo leer el vídeo.')), 12_000);
+    v.onloadeddata = () => { clearTimeout(t); res(); }; v.onerror = () => { clearTimeout(t); rej(new Error('No se pudo leer el vídeo.')); };
+    v.load();
+  });
   // Prime playback inside the tap that started this (Safari only lets media play after a gesture)
   await v.play().catch(() => {}); v.pause();
   await new Promise<void>((res) => { v.onseeked = () => res(); v.currentTime = trim.start; });
