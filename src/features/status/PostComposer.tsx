@@ -10,6 +10,10 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { statusBackgrounds } from '../../theme/tokens';
 import { Button, Field, IconButton, Pressy, Sheet, SheetRow, Txt, useToast } from '../../ui';
 import { VideoThumb } from '../chat/VideoPlayer';
+import { LinkCard } from '../../components/LinkCard';
+import { VideoPrep } from './VideoPrep';
+import { VideoInfo, canPrepVideo, needsPrep, probeVideo } from '../../lib/videoPrep';
+import { firstUrl } from '../../lib/linkPreview';
 import { t, tr } from '../../i18n';
 
 type Props = {
@@ -33,6 +37,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
   const [file, setFile] = useState<Picked | null>(null);
   const [caption, setCaption] = useState('');
   const [posting, setPosting] = useState(false);
+  const [prep, setPrep] = useState<{ file: Picked; info: VideoInfo } | null>(null);
   useEffect(() => { if (visible) { setStep('choose'); setText(''); setCaption(''); setFile(null); } }, [visible]);
   const biz = !!businessId;
   const folder = biz ? `status/biz/${businessId}` : `status/${me}`;
@@ -41,6 +46,11 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
     try {
       const f = kind === 'image' ? await pickPhoto({ max: 1600 }) : await pickVideo();
       if (!f) return;
+      if (kind === 'video' && Platform.OS === 'web' && canPrepVideo()) {
+        // too long / too heavy / full HD: trim and compress it first (see VideoPrep)
+        const info = await probeVideo(f.uri, f.size ?? 0).catch(() => null);
+        if (info && needsPrep(info)) { setPrep({ file: f, info }); return; }
+      }
       if (kind === 'video' && (f.size ?? 0) > 25 * 1024 * 1024) return toast.show('El vídeo supera los 25 MB. Recórtalo o elige otro.', 'error');
       setFile(f); setStep('media');
     } catch (e) { toast.show(friendly(e, 'No se pudo abrir la galería.'), 'error'); }
@@ -65,8 +75,10 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
         {biz && <Txt v="small" tone="muted" style={{ marginBottom: 6 }}>{t('Lo verán tus clientes en Estados y cualquiera que abra tu perfil público. Dura {n} días.', { n: BUSINESS_POST_DAYS })}</Txt>}
         <SheetRow icon="text" label="Texto" sub="Escribe algo sobre un fondo de color" onPress={() => setStep('text')} />
         <SheetRow icon="images" label="Foto" sub={biz ? 'Producto, local, equipo… con un pie de foto' : 'Elige una imagen de tu galería'} onPress={() => pick('image')} />
-        <SheetRow icon="videocam" label="Vídeo" sub="Hasta 90 segundos · máx. 25 MB" onPress={() => pick('video')} />
+        <SheetRow icon="videocam" label="Vídeo" sub="Hasta 90 segundos · se recorta y comprime si hace falta" onPress={() => pick('video')} />
       </Sheet>
+
+      <VideoPrep visible={visible && !!prep} file={prep?.file ?? null} info={prep?.info ?? null} onClose={() => setPrep(null)} onDone={(f) => { setPrep(null); setFile(f); setStep('media'); }} />
 
       <Sheet visible={visible && step === 'media' && !!file} onClose={() => setStep('choose')} title={file?.type.startsWith('video/') ? 'Publicar vídeo' : 'Publicar foto'}>
         {file && (
@@ -76,6 +88,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
                 : Platform.OS === 'web' ? <VideoThumb url={file.uri} width={300} height={300} onOpen={() => {}} /> : <View style={{ padding: 20 }}><Txt tone="muted">{file.name} · {bytes(file.size)}</Txt></View>}
             </View>
             <Field label={biz ? 'Pie (opcional) · precio, oferta, enlace…' : 'Texto (opcional)'} value={caption} onChangeText={setCaption} multiline maxLength={400} placeholder={biz ? 'Nueva colección de otoño · desde 29 €' : 'Escribe algo'} />
+            {firstUrl(caption) && <LinkCard url={firstUrl(caption)!} />}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Button title="Cambiar" variant="secondary" style={{ flex: 1 }} onPress={() => setStep('choose')} />
               <Button title="Publicar" icon="send" style={{ flex: 2 }} loading={posting} onPress={() => publish(file.type.startsWith('video/') ? 'video' : 'image')} />
@@ -97,6 +110,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
               <TextInput value={text} onChangeText={setText} multiline maxLength={400} autoFocus placeholder={tr(biz ? 'Escribe una novedad para tus clientes' : 'Escribe un estado')} placeholderTextColor="rgba(255,255,255,0.6)" selectionColor="#fff" accessibilityLabel={tr('Texto del estado')}
                 style={{ color: '#fff', fontSize: 30, lineHeight: 38, textAlign: 'center', fontFamily: 'Inter_700Bold', outlineStyle: 'none' } as object} />
             </View>
+            {firstUrl(text) && <View style={{ paddingHorizontal: 20, paddingBottom: 12, maxWidth: 560, alignSelf: 'center', width: '100%' }}><LinkCard url={firstUrl(text)!} dark /></View>}
             <View style={{ paddingHorizontal: 20, maxWidth: 560, alignSelf: 'center', width: '100%' }}>
               <Button title="Publicar" variant="secondary" size="lg" icon="send" loading={posting} disabled={!text.trim()} onPress={() => publish('text')} />
             </View>

@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusRow } from '../../lib/api';
 import { relative } from '../../lib/format';
 import { signedMediaUrl } from '../../lib/media';
+import { LinkCard } from '../../components/LinkCard';
+import { firstUrl } from '../../lib/linkPreview';
 import { statusBackgrounds } from '../../theme/tokens';
 import { Avatar, Icon, IconButton, Pressy, Txt } from '../../ui';
 import { t } from '../../i18n';
@@ -52,6 +54,7 @@ export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onC
   if (!visible || !current) return null;
   const [from, to] = statusBackgrounds[current.bg % statusBackgrounds.length];
   const isVideo = current.kind === 'video';
+  const linkUrl = firstUrl(current.body);
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center' }}>
@@ -75,6 +78,8 @@ export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onC
             <Pressy onPress={prev} style={{ flex: 1 }} scale={1} accessibilityLabel="Anterior"><View style={{ flex: 1 }} /></Pressy>
             <Pressy onPress={next} style={{ flex: 2 }} scale={1} accessibilityLabel="Siguiente"><View style={{ flex: 1 }} /></Pressy>
           </View>
+          {linkUrl && <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + (business ? 96 : 40) + (current.kind !== 'text' && current.body ? 78 : 0), zIndex: 3 }}><LinkCard url={linkUrl} dark /></View>}
+
 
           <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 12, gap: 10 }} pointerEvents="box-none">
             <View style={{ flexDirection: 'row', gap: 4 }}>
