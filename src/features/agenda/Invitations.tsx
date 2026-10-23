@@ -14,7 +14,8 @@ export function useMyAppointments() {
   const [rows, setRows] = useState<MyAppointment[] | null>(null);
   const load = useCallback(async () => { try { setRows(await myAppointments()); } catch { setRows((r) => r ?? []); } }, []);
   // Invitations arrive as a card in a chat, so every inbox refresh is a good moment to re-check.
-  useEffect(() => { load(); }, [load, chats.length, chats[0]?.last_message_id]);
+  const latest = chats[0]?.last_message_id;
+  useEffect(() => { load(); }, [load, chats.length, latest]);
   const pending = (rows ?? []).filter((a) => a.status === 'scheduled' && new Date(a.ends_at) > new Date());
   const upcoming = (rows ?? []).filter((a) => a.status === 'confirmed' && new Date(a.ends_at) > new Date());
   return { rows, pending, upcoming, reload: load };

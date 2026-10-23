@@ -8,6 +8,7 @@ import { relative } from '../../lib/format';
 import { signedMediaUrl } from '../../lib/media';
 import { statusBackgrounds } from '../../theme/tokens';
 import { Avatar, Icon, IconButton, Pressy, Txt } from '../../ui';
+import { t } from '../../i18n';
 
 type Props = {
   visible: boolean; items: StatusRow[]; name: string; avatarPath?: string | null; seed: string; mine?: boolean; onClose: () => void; onDelete?: (s: StatusRow) => void;
@@ -87,7 +88,7 @@ export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onC
               <Avatar name={name} seed={seed} path={avatarPath} size={38} business={!!business} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Txt v="smallStrong" style={{ color: '#fff' }}>{mine && !business ? 'Mi estado' : name}</Txt>{business && <Icon name="storefront" size={13} color="#FFD98A" />}</View>
-                <Txt v="caption" style={{ color: 'rgba(255,255,255,0.75)' }}>{relative(current.created_at)}{isVideo ? ' · vídeo' : ''}</Txt>
+                <Txt v="caption" style={{ color: 'rgba(255,255,255,0.75)' }}>{isVideo ? t('{when} · vídeo', { when: relative(current.created_at) }) : relative(current.created_at)}</Txt>
               </View>
               {mine && onDelete && <IconButton icon="trash" label={business ? 'Eliminar publicación' : 'Eliminar estado'} size={40} onPress={() => { onDelete(current); if (items.length === 1) onClose(); else next(); }} />}
               <IconButton icon="close" label="Cerrar" size={40} onPress={onClose} />

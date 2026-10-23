@@ -58,8 +58,8 @@ function starsTile(color: string, opacity: number) {
 
 /** Chat background. It must never fight with the bubbles. */
 export function Wallpaper({ kind, small }: { kind?: WallpaperKey; small?: boolean }) {
-  const { c, mode, space, wallpaper, wallpaperImage } = useTheme();
-  const k: WallpaperKey = kind ?? (space === 'business' ? 'plain' : wallpaper);
+  const { c, mode, space, wallpaper, wallpaperImage, incognito } = useTheme();
+  const k: WallpaperKey = kind ?? (space === 'business' || incognito ? 'plain' : wallpaper);
   const dark = mode === 'dark';
   const web = Platform.OS === 'web';
 

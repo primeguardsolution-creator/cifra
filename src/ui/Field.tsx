@@ -9,7 +9,7 @@ import { Txt } from './Txt';
 type Props = TextInputProps & { label?: string; error?: string | null; icon?: IconName; hint?: string; left?: React.ReactNode; right?: React.ReactNode };
 
 export const Field = forwardRef<TextInput, Props>(function Field({ label, error, icon, hint, left, right, style, ...props }, ref) {
-  const { c, r } = useTheme();
+  const { c, r, incognito } = useTheme();
   const [focus, setFocus] = useState(false);
   return (
     <View style={{ gap: 6 }}>
@@ -22,7 +22,7 @@ export const Field = forwardRef<TextInput, Props>(function Field({ label, error,
           {...props}
           placeholder={props.placeholder ? tr(props.placeholder) : undefined}
           onFocus={(e) => { setFocus(true); props.onFocus?.(e); }} onBlur={(e) => { setFocus(false); props.onBlur?.(e); }}
-          style={[{ flex: 1, color: c.text, fontFamily: font.regular, fontSize: 16, paddingVertical: 13, outlineStyle: 'none' } as object, style]}
+          style={[{ flex: 1, color: c.text, fontFamily: incognito ? font.typewriter : font.regular, fontSize: 16, paddingVertical: 13, outlineStyle: 'none' } as object, style]}
         />
         {right}
       </View>

@@ -64,6 +64,7 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
         if (payload.eventType === 'INSERT' && row.sender_id !== user.id && !row.is_internal) notifyBrowser();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members' }, soon)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'conversations' }, soon) // incognito rooms vanishing
       .subscribe((status) => { if (status === 'SUBSCRIBED') soon(); });
     const sub = AppState.addEventListener('change', (s) => s === 'active' && soon());
     return () => { clearTimeout(timer); sub.remove(); supabase.removeChannel(channel); };

@@ -103,7 +103,7 @@ export default function Updates() {
           return (
             <Pressy key={uid} onPress={() => setViewing({ kind: 'person', id: uid })} scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 16 }}>
               <Avatar name={p?.display_name} seed={uid} path={p?.avatar_path} size={54} ring />
-              <View style={{ flex: 1 }}><Txt v="bodyStrong">{p?.display_name ?? 'Contacto'}</Txt><Txt v="small" tone="muted">{last.kind === 'video' ? '🎬 Vídeo · ' : last.kind === 'image' ? '📷 Foto · ' : ''}{relative(last.created_at)}</Txt></View>
+              <View style={{ flex: 1 }}><Txt v="bodyStrong">{p?.display_name ?? 'Contacto'}</Txt><Txt v="small" tone="muted">{last.kind === 'video' ? t('🎬 Vídeo · {when}', { when: relative(last.created_at) }) : last.kind === 'image' ? t('📷 Foto · {when}', { when: relative(last.created_at) }) : relative(last.created_at)}</Txt></View>
             </Pressy>
           );
         })}

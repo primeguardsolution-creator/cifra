@@ -20,6 +20,15 @@ export function chatTitle(c: Chat) {
   return c.peer_name || c.title || (c.peer_phone ? formatPhone(c.peer_phone) : 'Conversación');
 }
 
+/** "2 h 41 min" left before an incognito room self-destructs (null when it has no timer). */
+export function incognitoLeft(c: Pick<Chat, 'incognito' | 'expires_at'>): string | null {
+  if (!c.incognito || !c.expires_at) return null;
+  const ms = new Date(c.expires_at).getTime() - Date.now();
+  if (ms <= 0) return tr('caducado');
+  const h = Math.floor(ms / 3600e3); const m = Math.max(1, Math.floor((ms % 3600e3) / 60e3));
+  return h > 0 ? t('{h} h {m} min', { h, m }) : t('{m} min', { m });
+}
+
 export function previewText(c: Chat, me?: string) {
   if (c.last_message_id == null) return tr(c.kind === 'business' && c.perspective === 'personal' ? 'Escribe tu primer mensaje' : 'Di hola 👋');
   if (c.last_deleted) return tr('Mensaje eliminado');
@@ -48,7 +57,9 @@ export function ChatRow({ chat, selected, showState, onMenu, typing }: { chat: C
       <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={biz ? 42 : 52} group={chat.kind === 'group'} business={chat.kind === 'business' && !agentView} />
       <View style={{ flex: 1, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Txt v="bodyStrong" numberOfLines={1} style={{ flex: 1, fontFamily: hasUnread ? 'Inter_700Bold' : 'Inter_600SemiBold' }}>{chatTitle(chat)}</Txt>
+          {chat.incognito && <Icon name="glasses" size={16} tone="muted" />}
+          <Txt v="bodyStrong" numberOfLines={1} style={{ flex: 1, fontFamily: chat.incognito ? 'SpecialElite_400Regular' : hasUnread ? 'Inter_700Bold' : 'Inter_600SemiBold' }}>{chatTitle(chat)}</Txt>
+          {chat.incognito && incognitoLeft(chat) && <Txt v="mono" tone="faint">⏳ {incognitoLeft(chat)}</Txt>}
           {chat.pinned_at && <Icon name="pin" size={12} tone="faint" />}
           <Txt v="mono" tone={hasUnread ? 'accent' : 'faint'}>{listTime(chat.last_at ?? chat.created_at)}</Txt>
         </View>

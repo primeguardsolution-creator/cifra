@@ -118,6 +118,18 @@ exception when others then
   raise notice 'pg_cron not enabled: incognito chats are hidden when they expire and purged on the next run (%)', sqlerrm;
 end $$;
 
+-- the app listens for the DELETE of a conversation (self-destruction) and for destroy requests on the members
+do $$
+declare t text;
+begin
+  foreach t in array array['conversations', 'conversation_members'] loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;
+
 -- - 3. Chat list: incognito flags, no phone leak inside incognito rooms, expired rooms hidden -
 drop function if exists public.list_chats(uuid, uuid);
 create or replace function public.list_chats(p_business uuid default null, p_conv uuid default null)

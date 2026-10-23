@@ -62,7 +62,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
   return (
     <>
       <Sheet visible={visible && step === 'choose'} onClose={onClose} title={biz ? 'Nueva publicación' : 'Nuevo estado'}>
-        {biz && <Txt v="small" tone="muted" style={{ marginBottom: 6 }}>Lo verán tus clientes en Estados y cualquiera que abra tu perfil público. Dura {String(BUSINESS_POST_DAYS)} días.</Txt>}
+        {biz && <Txt v="small" tone="muted" style={{ marginBottom: 6 }}>{t('Lo verán tus clientes en Estados y cualquiera que abra tu perfil público. Dura {n} días.', { n: BUSINESS_POST_DAYS })}</Txt>}
         <SheetRow icon="text" label="Texto" sub="Escribe algo sobre un fondo de color" onPress={() => setStep('text')} />
         <SheetRow icon="images" label="Foto" sub={biz ? 'Producto, local, equipo… con un pie de foto' : 'Elige una imagen de tu galería'} onPress={() => pick('image')} />
         <SheetRow icon="videocam" label="Vídeo" sub="Hasta 90 segundos · máx. 25 MB" onPress={() => pick('video')} />

@@ -229,7 +229,7 @@ function InviteSearch({ value, onChange }: { value: Invitee | null; onChange: (v
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: r(12), backgroundColor: c.accentSoft }}>
         <Avatar name={value.name} seed={value.id} path={value.avatar} size={36} />
-        <View style={{ flex: 1 }}><Txt v="smallStrong" style={{ color: c.accentSoftText }}>{value.name}</Txt><Txt v="caption" style={{ color: c.accentSoftText }}>{value.sub} · recibirá la invitación en su chat</Txt></View>
+        <View style={{ flex: 1 }}><Txt v="smallStrong" style={{ color: c.accentSoftText }}>{value.name}</Txt><Txt v="caption" style={{ color: c.accentSoftText }}>{t('{sub} · recibirá la invitación en su chat', { sub: value.sub })}</Txt></View>
         <Pressy onPress={() => onChange(null)} accessibilityRole="button" accessibilityLabel="Quitar invitado" scale={0.9}><Icon name="close-circle" size={20} color={c.accentSoftText} /></Pressy>
       </View>
     );

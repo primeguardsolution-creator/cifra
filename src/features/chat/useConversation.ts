@@ -22,6 +22,9 @@ export function useConversation(id: string, me: string) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typing, setTyping] = useState<Typing>({});
+  /** Set when the room no longer exists (an incognito chat that self-destructed or was destroyed by both). */
+  const [destroyed, setDestroyed] = useState(false);
+  const incognitoRef = useRef(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastTypingSent = useRef(0);
   const known = useRef(new Set<string>());
@@ -51,7 +54,8 @@ export function useConversation(id: string, me: string) {
   const loadInitial = useCallback(async () => {
     try {
       const [meta, page, memberReads] = await Promise.all([getChat(id), fetchMessages(id), fetchMemberReads(id)]);
-      if (!meta) { setError('Esta conversación no existe o no tienes acceso.'); return; }
+      if (!meta) { if (incognitoRef.current) setDestroyed(true); else setError('Esta conversación no existe o no tienes acceso.'); return; }
+      incognitoRef.current = !!meta.incognito;
       setChat(meta); merge(page); setHasMore(page.length === PAGE); setError(null);
       setReads(Object.fromEntries(memberReads.map((r) => [r.user_id, r.last_read_at])));
       fetchReactions(page.map((m) => m.id)).then((r) => setReactions((prev) => [...prev.filter((x) => !r.some((y) => y.message_id === x.message_id && y.user_id === x.user_id)), ...r])).catch(() => {});
@@ -61,10 +65,12 @@ export function useConversation(id: string, me: string) {
   }, [id, merge, ack, resolvePeople]);
 
   useEffect(() => {
-    setLoading(true); setMessages([]); setReactions([]); setChat(null); setError(null); known.current.clear();
+    setLoading(true); setMessages([]); setReactions([]); setChat(null); setError(null); setDestroyed(false); incognitoRef.current = false; known.current.clear();
     loadInitial();
     let first = true;
     const channel = supabase.channel(`chat:${id}`, { config: { broadcast: { self: false } } })
+      // self-destruction of an incognito room (realtime only sends the id of the deleted row)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'conversations' }, (p) => { if ((p.old as { id?: string })?.id === id) setDestroyed(true); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` }, (p) => {
         const m = p.new as Message; merge([m]);
         setTyping((t) => { const next = { ...t }; delete next[m.sender_id]; return next; });
@@ -82,6 +88,8 @@ export function useConversation(id: string, me: string) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter: `conversation_id=eq.${id}` }, (p) => {
         const r = p.new as { user_id: string; last_read_at: string | null };
         setReads((prev) => ({ ...prev, [r.user_id]: r.last_read_at }));
+        // incognito: a "destroy now" request from the other side lives on their member row → refresh the flags
+        if (incognitoRef.current && r.user_id !== me) getChat(id).then((m) => { if (m) setChat(m); else setDestroyed(true); }).catch(() => {});
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         const who = (payload as { user_id?: string }).user_id;
@@ -99,6 +107,14 @@ export function useConversation(id: string, me: string) {
       if (Platform.OS === 'web' && typeof document !== 'undefined') document.removeEventListener('visibilitychange', vis);
     };
   }, [id, me, loadInitial, merge, ack]);
+
+  // incognito rooms: re-check every minute (expiry, destroy requests) in case a realtime event was missed
+  useEffect(() => {
+    if (!chat?.incognito || destroyed) return;
+    const tick = () => getChat(id).then((m) => { if (m) setChat(m); else setDestroyed(true); }).catch(() => {});
+    const timer = setInterval(tick, 60_000);
+    return () => clearInterval(timer);
+  }, [chat?.incognito, destroyed, id]);
 
   // typing indicators expire after 4 s
   useEffect(() => {
@@ -184,5 +200,5 @@ export function useConversation(id: string, me: string) {
 
   const typingNow = Object.entries(typing).filter(([, at]) => Date.now() - at < 4000).map(([u]) => u);
 
-  return { chat, setChat, messages, reactions, people, loading, error, hasMore, loadingMore, loadOlder, send, retry, discard, edit, remove, react, notifyTyping, othersReadAt, typingNow, reload: loadInitial };
+  return { chat, setChat, messages, reactions, people, loading, error, destroyed, hasMore, loadingMore, loadOlder, send, retry, discard, edit, remove, react, notifyTyping, othersReadAt, typingNow, reload: loadInitial };
 }

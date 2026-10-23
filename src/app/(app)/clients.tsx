@@ -8,7 +8,6 @@ import { WIDE } from '../../lib/layout';
 import { useChats } from '../../state/ChatsProvider';
 import { useSpace } from '../../state/SpaceProvider';
 import { useTheme } from '../../theme/ThemeProvider';
-import { font } from '../../theme/tokens';
 import { Avatar, Button, Chip, Field, Icon, IconButton, IconName, Pressy, Sheet, Txt, useToast } from '../../ui';
 import { loc, t as T, tr } from '../../i18n';
 

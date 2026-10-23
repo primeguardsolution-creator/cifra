@@ -25,7 +25,7 @@ type Props = {
 };
 
 export function Composer(p: Props) {
-  const { c, r } = useTheme();
+  const { c, r, incognito } = useTheme();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
@@ -182,7 +182,7 @@ export function Composer(p: Props) {
             ref={input} autoFocus={p.autoFocus} value={text} onChangeText={(t) => { setText(t); if (t) p.onTyping(); }} multiline numberOfLines={1} onKeyPress={onKey}
             onContentSizeChange={(e) => setInputH(Math.min(120, Math.max(24, e.nativeEvent.contentSize.height)))}
             placeholder={tr(internal ? 'Nota solo para tu equipo' : p.editing ? 'Edita tu mensaje' : 'Escribe un mensaje')} placeholderTextColor={c.textFaint} selectionColor={c.accent} accessibilityLabel={tr('Mensaje')}
-            style={{ color: c.text, fontFamily: font.regular, fontSize: 16, lineHeight: 22, height: text ? inputH : 24, paddingVertical: 0, marginVertical: 11, outlineStyle: 'none' } as object}
+            style={{ color: c.text, fontFamily: incognito ? font.typewriter : font.regular, fontSize: 16, lineHeight: 22, height: text ? inputH : 24, paddingVertical: 0, marginVertical: 11, outlineStyle: 'none' } as object}
           />
         </View>
         {p.agent && !p.editing && p.quickReplies.length > 0 && <IconButton icon="flash" label="Respuestas rápidas" size={44} tone="accent" onPress={() => setQuick(true)} />}
