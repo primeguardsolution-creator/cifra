@@ -1197,4 +1197,12 @@ export const rows: [string, string, string][] = [
   ["Mensajes de clientes en tu negocio (con 💼)", "Customer messages in your business (marked with 💼)", "Kundennachrichten in deinem Unternehmen (mit 💼)"],
   ["Avisos de Business activados", "Business alerts on", "Business-Benachrichtigungen an"],
   ["Avisos personales activados", "Personal alerts on", "Persönliche Benachrichtigungen an"],
+  ["Mover la foto", "Move the photo", "Foto verschieben"],
+  ["Elige qué parte de la foto se ve", "Choose which part of the photo shows", "Wähle, welcher Teil des Fotos sichtbar ist"],
+  ["Arrastra la foto arriba o abajo", "Drag the photo up or down", "Ziehe das Foto nach oben oder unten"],
+  ["Arrastra para encuadrar", "Drag to frame", "Zum Ausrichten ziehen"],
+  ["Arriba", "Top", "Oben"],
+  ["Centro", "Center", "Mitte"],
+  ["Abajo", "Bottom", "Unten"],
+  ["Guardar encuadre", "Save framing", "Ausschnitt speichern"],
 ];

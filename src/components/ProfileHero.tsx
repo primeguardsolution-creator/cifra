@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { CoverImage } from './CoverImage';
 import { Image, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { publicAvatarUrl } from '../lib/media';
@@ -32,7 +33,7 @@ export function ProfileHero({ kind, name, seed, avatarPath, coverPath, accent, h
       <View style={{ width: '100%', height, overflow: 'hidden', backgroundColor: biz ? '#101009' : tint[1] }}>
         {cover ? (
           <>
-            <Image source={{ uri: cover }} resizeMode="cover" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' } as object} accessibilityIgnoresInvertColors />
+            <CoverImage path={coverPath} />
             <LinearGradient colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.25)']} style={{ position: 'absolute', inset: 0 } as object} />
           </>
         ) : biz ? (

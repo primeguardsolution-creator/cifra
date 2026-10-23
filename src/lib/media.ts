@@ -7,9 +7,18 @@ export const MAX_UPLOAD = 25 * 1024 * 1024;
 
 export function publicAvatarUrl(path?: string | null) {
   if (!path) return null;
-  if (/^https?:/.test(path)) return path;
-  return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+  const file = path.split('#')[0];
+  if (/^https?:/.test(file)) return file;
+  return supabase.storage.from('avatars').getPublicUrl(file).data.publicUrl;
 }
+
+/** A cover remembers which part of the photo is visible as a `#y=NN` suffix of its stored path (0 = top, 100 = bottom). */
+export function coverFile(path?: string | null) { return path ? path.split('#')[0] : null; }
+export function coverFocus(path?: string | null) {
+  const m = path?.match(/#y=(\d{1,3})$/);
+  return m ? Math.max(0, Math.min(100, Number(m[1]))) : 50;
+}
+export const withCoverFocus = (path: string, y: number) => `${coverFile(path)}#y=${Math.round(Math.max(0, Math.min(100, y)))}`;
 
 const signed = new Map<string, { url: string; exp: number }>();
 export async function signedMediaUrl(path: string): Promise<string | null> {

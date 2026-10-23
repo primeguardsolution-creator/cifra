@@ -33,14 +33,14 @@ export function PullToRefresh({ atEnd, onRefresh, children }: { atEnd: React.Mut
     onPanResponderTerminate: () => { setArmed(false); Animated.spring(pull, { toValue: 0, useNativeDriver: false }).start(); },
   })).current;
   return (
-    <View style={{ flex: 1 }} {...pan.panHandlers}>
+    <View style={{ flex: 1, overflow: 'hidden' }} {...pan.panHandlers}>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 5, alignItems: 'center', justifyContent: 'center', height: pull, overflow: 'hidden' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
           {busy ? <ActivityIndicator color={c.accent} size="small" /> : <Icon name={armed ? 'refresh-circle' : 'arrow-down-circle-outline'} size={18} tone={armed ? 'accent' : 'muted'} />}
           <Txt v="caption" tone={armed || busy ? 'accent' : 'muted'}>{busy ? 'Actualizando…' : armed ? 'Suelta para actualizar' : 'Arrastra para actualizar'}</Txt>
         </View>
       </Animated.View>
-      <Animated.View style={{ flex: 1, transform: [{ translateY: Animated.multiply(pull, -1) }] }}>{children}</Animated.View>
+      <Animated.View style={{ flex: 1, overflow: 'hidden', transform: [{ translateY: Animated.multiply(pull, -1) }] }}>{children}</Animated.View>
     </View>
   );
 }

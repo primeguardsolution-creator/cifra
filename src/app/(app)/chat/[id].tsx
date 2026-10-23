@@ -166,7 +166,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   };
 
   const header = (
-    <View style={{ paddingTop: insets.top + 6, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}>
+    <View style={{ paddingTop: insets.top + 6, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, zIndex: 10, position: 'relative' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingBottom: 8, minHeight: 56 }}>
         {!wide && <IconButton icon="chevron-back" label="Volver" onPress={() => (router.canGoBack() ? router.back() : router.replace(agent ? '/inbox' : '/chats'))} />}
         <Pressy onPress={openProfile} accessibilityRole="button" accessibilityLabel="Ver perfil" scale={0.99} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: wide ? 10 : 2 }}>
@@ -236,7 +236,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {header}
-      <View style={{ flex: 1, backgroundColor: c.bg }}><Wallpaper /><PullToRefresh atEnd={atEnd} onRefresh={async () => { await conv.reload(); refresh(); }}>{body}</PullToRefresh></View>
+      <View style={{ flex: 1, backgroundColor: c.bg, overflow: 'hidden' }}><Wallpaper /><PullToRefresh atEnd={atEnd} onRefresh={async () => { await conv.reload(); refresh(); }}>{body}</PullToRefresh></View>
       {scheduled.length > 0 && (
         <Pressy onPress={() => setSchedOpen(true)} accessibilityRole="button" accessibilityLabel="Ver mensajes programados" scale={0.99} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: c.accentSoft, borderTopWidth: 1, borderTopColor: c.border }}>
           <Icon name="alarm" size={16} color={c.accentSoftText} />
