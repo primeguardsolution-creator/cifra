@@ -4,7 +4,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Business, ContactRow, PersonCard, UserHit, createGroup, findUserByPhone, findUserByUsername, listContacts, saveContact, searchBusinesses, searchUsers, startDirectChat } from '../../lib/api';
 import { friendly } from '../../lib/errors';
-import { Country, countries, flag, formatPhone, toE164 } from '../../lib/phone';
+import { Country, countries, countryMatches, countryName, flag, formatPhone, toE164 } from '../../lib/phone';
 import { appUrl, inviteMessage, shareText } from '../../lib/share';
 import { useAuth } from '../../state/AuthProvider';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -121,7 +121,7 @@ function ByPhone({ presetQ, presetMode, contacts, myId, onSaved, toast }: { pres
     } catch (e) { toast(friendly(e), 'error'); } finally { setBusy(false); }
   };
 
-  const filtered = q.trim() ? countries.filter((x) => x.name.toLowerCase().includes(q.trim().toLowerCase()) || x.dial.startsWith(q.trim().replace('+', ''))) : countries;
+  const filtered = q.trim() ? countries.filter((x) => countryMatches(x, q)) : countries;
   return (
     <View style={{ gap: 14 }}>
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -131,7 +131,7 @@ function ByPhone({ presetQ, presetMode, contacts, myId, onSaved, toast }: { pres
       <Txt tone="muted">{mode === 'phone' ? 'Escribe el número completo de la persona. Solo la encontrarás si ya tiene cuenta en CIFRA.' : 'Pide a tu contacto su @usuario: así chateáis sin compartir ningún número de teléfono.'}</Txt>
       {mode === 'phone' ? (
         <Field value={phone} onChangeText={(t) => { setPhone(t); setResult(null); }} keyboardType="phone-pad" placeholder="600 123 456" returnKeyType="search" onSubmitEditing={search} error={error}
-          left={<Pressy onPress={() => setPick(true)} accessibilityRole="button" accessibilityLabel={t('País: {name}', { name: tr(country.name) })} scale={0.94} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 10, borderRightWidth: 1, borderRightColor: c.border, height: 28 }}><Txt style={{ fontSize: 20 }}>{flag(country.iso)}</Txt><Txt v="bodyStrong">+{country.dial}</Txt><Icon name="chevron-down" size={14} tone="muted" /></Pressy>} />
+          left={<Pressy onPress={() => setPick(true)} accessibilityRole="button" accessibilityLabel={t('País: {name}', { name: countryName(country) })} scale={0.94} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 10, borderRightWidth: 1, borderRightColor: c.border, height: 28 }}><Txt style={{ fontSize: 20 }}>{flag(country.iso)}</Txt><Txt v="bodyStrong">+{country.dial}</Txt><Icon name="chevron-down" size={14} tone="muted" /></Pressy>} />
       ) : (
         <Field value={handle} onChangeText={(t) => { setHandle(t.replace(/^@/, '').replace(/[^A-Za-z0-9_-]/g, '')); setResult(null); setBizHits([]); }} autoCapitalize="none" autoCorrect={false} placeholder="usuario" returnKeyType="search" onSubmitEditing={search} error={error} left={<Txt tone="muted" style={{ fontSize: 18 }}>@</Txt>} />
       )}
@@ -215,7 +215,7 @@ function ByPhone({ presetQ, presetMode, contacts, myId, onSaved, toast }: { pres
         <ScrollView style={{ maxHeight: 400, marginTop: 10 }} keyboardShouldPersistTaps="handled">
           {filtered.map((x) => (
             <Pressy key={x.iso + x.dial} onPress={() => { setCountry(x); setPick(false); setQ(''); }} scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 12 }}>
-              <Txt style={{ fontSize: 24 }}>{flag(x.iso)}</Txt><Txt v="bodyStrong" style={{ flex: 1 }}>{x.name}</Txt><Txt tone="muted">+{x.dial}</Txt>
+              <Txt style={{ fontSize: 24 }}>{flag(x.iso)}</Txt><Txt v="bodyStrong" style={{ flex: 1 }}>{countryName(x)}</Txt><Txt tone="muted">+{x.dial}</Txt>
             </Pressy>
           ))}
         </ScrollView>

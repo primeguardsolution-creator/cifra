@@ -29,6 +29,9 @@ export function incognitoLeft(c: Pick<Chat, 'incognito' | 'expires_at'>): string
   return h > 0 ? t('{h} h {m} min', { h, m }) : t('{m} min', { m });
 }
 
+/** Chats where the last message needs its author: groups, and business chats (the customer sees which team member wrote). */
+export const showsAuthor = (c: Chat, me?: string) => !!c.last_message_id && !c.last_deleted && !c.incognito && c.last_sender !== me && !c.last_internal && !!c.last_sender_name && (c.kind === 'group' || (c.kind === 'business' && c.perspective === 'personal'));
+
 export function previewText(c: Chat, me?: string) {
   if (c.last_message_id == null) return tr(c.kind === 'business' && c.perspective === 'personal' ? 'Escribe tu primer mensaje' : 'Di hola 👋');
   if (c.last_deleted) return tr('Mensaje eliminado');
@@ -65,7 +68,8 @@ export function ChatRow({ chat, selected, showState, onMenu, typing }: { chat: C
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {chat.last_sender === user?.id && !chat.last_deleted && chat.last_message_id ? <Icon name={chat.last_delivered || chat.last_read ? 'checkmark-done' : 'checkmark'} size={16} color={chat.last_read ? c.success : c.textFaint} /> : null}
-          <Txt v="small" tone={hasUnread ? 'text' : 'muted'} numberOfLines={1} style={{ flex: 1, fontStyle: chat.last_deleted ? 'italic' : 'normal', fontFamily: hasUnread ? 'Inter_500Medium' : 'Inter_400Regular' }}>{previewText(chat, user?.id)}</Txt>
+          {showsAuthor(chat, user?.id) && <Avatar name={chat.last_sender_name} seed={chat.last_sender ?? chat.id} path={chat.last_sender_avatar} size={18} />}
+          <Txt v="small" tone={hasUnread ? 'text' : 'muted'} numberOfLines={1} style={{ flex: 1, fontStyle: chat.last_deleted ? 'italic' : 'normal', fontFamily: hasUnread ? 'Inter_500Medium' : 'Inter_400Regular' }}>{showsAuthor(chat, user?.id) ? `${chat.last_sender_name}: ` : ''}{previewText(chat, user?.id)}</Txt>
           {muted && <Icon name="notifications-off" size={14} tone="faint" />}
           {chat.unread > 0 ? <Badge count={chat.unread} tone={muted ? 'muted' : 'new'} /> : chat.marked_unread ? <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.success }} accessibilityLabel="Marcado como no leído" /> : null}
         </View>

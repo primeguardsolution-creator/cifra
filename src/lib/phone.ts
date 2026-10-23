@@ -1,3 +1,6 @@
+import { loc } from '../i18n';
+import { ALIASES } from './countryAliases';
+
 export type Country = { iso: string; name: string; dial: string; keepZero?: boolean };
 
 export const countries: Country[] = [
@@ -24,6 +27,28 @@ export const countries: Country[] = [
   { iso: 'VN', name: 'Vietnam', dial: '84' }, { iso: 'AU', name: 'Australia', dial: '61' }, { iso: 'NZ', name: 'Nueva Zelanda', dial: '64' },
   { iso: 'CA', name: 'Canadá', dial: '1' },
 ];
+
+const fold = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const displayNames: Record<string, { of: (iso: string) => string | undefined } | null> = {};
+function namesIn(lang: string, iso: string): string | undefined {
+  try {
+    if (displayNames[lang] === undefined) displayNames[lang] = typeof Intl !== 'undefined' && !!(Intl as { DisplayNames?: unknown }).DisplayNames ? new (Intl as unknown as { DisplayNames: new (l: string[], o: { type: string }) => { of: (iso: string) => string | undefined } }).DisplayNames([lang], { type: 'region' }) : null;
+    return displayNames[lang]?.of(iso);
+  } catch { return undefined; }
+}
+/** The country's name in the language of the app (falls back to the Spanish source name). */
+export const countryName = (c: Country, lang: string = loc()) => (lang === 'es' ? c.name : namesIn(lang, c.iso) ?? c.name);
+/**
+ * Country search that works in any of the app's languages at once: Spanish, English and German names (accents and case
+ * ignored), the name in the current language, the ISO code and the dial prefix.
+ */
+export function countryMatches(c: Country, query: string): boolean {
+  const q = fold(query.replace(/^\+/, ''));
+  if (!q) return true;
+  if (/^\d+$/.test(q)) return c.dial.startsWith(q);
+  if (c.iso.toLowerCase() === q) return true;
+  return [c.name, namesIn('es', c.iso), namesIn('en', c.iso), namesIn('de', c.iso), countryName(c), ...(ALIASES[c.iso] ?? [])].some((n) => !!n && fold(n).includes(q));
+}
 
 export const flag = (iso: string) => String.fromCodePoint(...iso.toUpperCase().split('').map((ch) => 127397 + ch.charCodeAt(0)));
 

@@ -2,11 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, usePathname } from 'expo-router';
-import { Chat, countMissedCalls, listChats, markDelivered } from '../lib/api';
+import { Chat, countMissedCalls, getProfiles, listChats, markDelivered } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../ui';
 import { useAuth } from './AuthProvider';
 import { useSpace } from './SpaceProvider';
+import { listenForNotificationTaps, setAppBadge, syncPush } from '../lib/push';
 import { tr } from '../i18n';
 
 type ChatsState = {
@@ -74,9 +75,18 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
           const conv = row.conversation_id; const chat = listsRef.current.find((x) => x.id === conv);
           const muted = chat?.muted_until && new Date(chat.muted_until) > new Date();
           if (conv && pathRef.current !== `/chat/${conv}` && !muted && !chat?.incognito) {
-            const body = row.body?.trim() || tr(row.attachment_type?.startsWith('image') ? '📷 Foto' : row.attachment_type?.startsWith('video') ? '🎬 Vídeo' : row.attachment_type?.startsWith('audio') ? '🎤 Mensaje de voz' : '📎 Archivo');
-            const title = chat ? (chat.peer_name || chat.title || tr('Mensaje nuevo')) : tr('Mensaje nuevo');
-            toast.show(body, 'message', { title, duration: 5000, onPress: () => router.push({ pathname: '/chat/[id]', params: { id: conv } }) });
+            const text = row.body?.trim() || tr(row.attachment_type?.startsWith('image') ? '📷 Foto' : row.attachment_type?.startsWith('video') ? '🎬 Vídeo' : row.attachment_type?.startsWith('audio') ? '🎤 Mensaje de voz' : '📎 Archivo');
+            const open = () => router.push({ pathname: '/chat/[id]', params: { id: conv } });
+            // Who wrote: the other person in a 1:1 chat; in groups and business chats the author's name and photo, plus the group / company as title.
+            const business = chat?.kind === 'business'; const group = chat?.kind === 'group';
+            const show = (author?: { display_name: string; avatar_path: string | null } | null) => {
+              const name = row.is_automated ? chat?.business_name : author?.display_name;
+              const title = business && chat?.perspective === 'personal' ? chat.business_name ?? chat.peer_name : chat?.peer_name || chat?.title || tr('Mensaje nuevo');
+              const prefixed = (business || group) && name && name !== title ? `${name}: ${text}` : text;
+              toast.show(prefixed, 'message', { title: title ?? tr('Mensaje nuevo'), duration: 5000, onPress: open, avatar: { name: name ?? title, seed: row.sender_id, path: row.is_automated ? chat?.peer_avatar : author?.avatar_path ?? (chat?.kind === 'direct' ? chat.peer_avatar : null), business: !!row.is_automated } });
+            };
+            if (chat?.kind === 'direct' || !row.sender_id) show(null);
+            else Promise.race([getProfiles([row.sender_id]).then((p) => p[0] ?? null), new Promise<null>((r) => setTimeout(() => r(null), 1200))]).then(show).catch(() => show(null));
           }
         }
       })
@@ -98,7 +108,15 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const n = unread.personal + unread.business;
     document.title = n > 0 ? `(${n}) CIFRA` : 'CIFRA';
+    setAppBadge(n);
   }, [unread]);
+
+  // Push: re-register this device on start and open the chat when a notification is tapped.
+  useEffect(() => {
+    if (!user || Platform.OS !== 'web') return;
+    syncPush();
+    return listenForNotificationTaps((url) => router.push(url as never));
+  }, [user]);
 
   const value = useMemo(() => ({ chats, loading, error, refresh, unread, patch, missedCalls, markCallsSeen }), [chats, loading, error, refresh, unread, patch, missedCalls, markCallsSeen]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

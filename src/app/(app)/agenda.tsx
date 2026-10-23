@@ -13,7 +13,7 @@ import { useSpace } from '../../state/SpaceProvider';
 import { useTheme } from '../../theme/ThemeProvider';
 import { font } from '../../theme/tokens';
 import { Avatar, Chip, Field, Icon, Pressy, Sheet, Txt, useToast, Button } from '../../ui';
-import { loc, t } from '../../i18n';
+import { loc, t, tr } from '../../i18n';
 
 const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const DURATIONS = [15, 30, 45, 60, 90, 120];
@@ -287,7 +287,7 @@ function NewAppointment({ visible, onClose, bid, customers, team, me, day, prese
       <View style={{ gap: 14 }}>
         <View style={{ gap: 8 }}>
           <Field label="¿Qué es?" value={title} onChangeText={setTitle} placeholder="Consulta, visita, reunión…" maxLength={80} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{QUICK_TITLES.map((t) => <Chip key={t} label={t} active={title === t} onPress={() => setTitle(t)} />)}</ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{QUICK_TITLES.map((q) => <Chip key={q} label={q} active={title === tr(q)} onPress={() => setTitle(tr(q))} />)}</ScrollView>
         </View>
         <View style={{ gap: 8 }}>
           <Txt v="caption" tone="muted">¿Con quién? · recibe la invitación en su chat y la acepta con un toque</Txt>

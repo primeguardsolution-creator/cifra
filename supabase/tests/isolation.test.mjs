@@ -79,6 +79,10 @@ await db.exec(migration('20261027_000009_social_incognito_covers.sql'));
 await db.exec(migration('20261027_000009_social_incognito_covers.sql'));
 await db.exec(migration('20261028_000010_delivery_receipts.sql'));
 await db.exec(migration('20261028_000010_delivery_receipts.sql'));
+await db.exec(migration('20261029_000011_greeting_push.sql'));
+await db.exec(migration('20261029_000011_greeting_push.sql'));
+await db.exec(migration('20261030_000012_push_prefs.sql'));
+await db.exec(migration('20261030_000012_push_prefs.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -696,6 +700,84 @@ await check('un tick al enviar, dos cuando llega al otro dispositivo, dos de col
   await as('cleo', async () => db.query(`select public.mark_read($1)`, [cid]));
   await as('ana', async () => { const [row] = await q(`select last_delivered, last_read from public.list_chats(null, $1)`, [cid]); eq(row, { last_delivered: true, last_read: true }); });
   await as('dani', async () => eq((await q(`select public.mark_delivered($1) as n`, [cid]))[0].n, 0)); // not a member: nothing to mark
+});
+
+
+console.log('\nSaludo solo si escribe primero el cliente, remitente en la lista y Web Push (v11)');
+let evaId;
+await check('el saludo automatico no sale si el negocio escribio primero; si el cliente escribe primero, si', async () => {
+  [{ id: evaId }] = await q(`insert into auth.users (phone, raw_user_meta_data, phone_confirmed_at) values ('34600000005', '{"display_name":"Eva"}', now()) returning id`);
+  ids.eva = evaId;
+  const evaCard = await as('cleo', async () => (await q(`insert into public.customers (business_id, name, phone) values ($1, 'Eva', '+34 600 000 005') returning id`, [biz]))[0].id);
+  const conv = await as('cleo', async () => (await q(`select public.start_customer_chat($1) as id`, [evaCard]))[0].id);
+  await as('cleo', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'Hola Eva, te escribo yo')`, [conv]));
+  await as('eva', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'Hola, gracias')`, [conv]));
+  eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and is_automated`, [conv]))[0].n, 0);
+  // a brand new customer who writes first still gets the greeting
+  const [{ id: ferId }] = await q(`insert into auth.users (phone, raw_user_meta_data, phone_confirmed_at) values ('34600000006', '{"display_name":"Fer"}', now()) returning id`); ids.fer = ferId;
+  const conv2 = await as('fer', async () => (await q(`select public.start_business_chat($1) as id`, [biz]))[0].id);
+  await as('fer', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'Buenas')`, [conv2]));
+  eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and is_automated`, [conv2]))[0].n, 1);
+  ids._evaConv = conv;
+});
+await check('la lista de chats dice quien escribio el ultimo mensaje (nombre y foto)', async () => {
+  await as('cleo', async () => { const [r] = await q(`select last_sender_name from public.list_chats(null, $1)`, [ids._evaConv]); eq(r.last_sender_name, 'Eva'); });
+  await as('eva', async () => { const [r] = await q(`select last_sender_name from public.list_chats(null, $1)`, [ids._evaConv]); eq(r.last_sender_name, 'Eva'); });
+  await as('cleo', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'Te llamo manana')`, [ids._evaConv]));
+  await as('eva', async () => { const [r] = await q(`select last_sender_name from public.list_chats(null, $1)`, [ids._evaConv]); eq(r.last_sender_name, 'cleo'); });
+});
+await check('Web Push: suscribirse, titulos/cuerpos por caso y nadie mas puede pedir los datos', async () => {
+  const sub = (who, ep) => as(who, () => db.query(`select public.save_push_subscription($1, 'BPkey', 'authkey', 'iPhone')`, [ep]));
+  await sub('eva', 'https://push.example/eva'); await sub('cleo', 'https://push.example/cleo'); await sub('ana', 'https://push.example/ana'); await sub('ben', 'https://push.example/ben');
+  await as('ben', async () => denied(db.query(`select public.save_push_subscription('http://insecure/x', 'a', 'b')`), 'insecure endpoint'));
+  await as('ben', async () => denied(db.query(`select * from public.push_subscriptions`), 'table is private'));
+  // team -> customer: title is the business, body carries the author's name
+  const [{ id: m1 }] = await q(`select id from public.messages where conversation_id = $1 and body = 'Te llamo manana'`, [ids._evaConv]);
+  const r1 = await q(`select title, body, endpoint from public.push_payloads($1)`, [m1]);
+  eq(r1.map((r) => [r.title, r.body, r.endpoint]), [['Café Aurora', 'cleo: Te llamo manana', 'https://push.example/eva']]);
+  // customer -> business: every agent without assignment (owner ana + agent cleo), title names the customer and the business
+  const [{ id: m2 }] = await q(`select id from public.messages where conversation_id = $1 and body = 'Hola, gracias'`, [ids._evaConv]);
+  const r2 = await q(`select title, body, endpoint from public.push_payloads($1) order by endpoint`, [m2]);
+  eq(r2.map((r) => [r.title, r.body, r.endpoint]), [['\u{1F4BC} Eva · Café Aurora', 'Hola, gracias', 'https://push.example/ana'], ['\u{1F4BC} Eva · Café Aurora', 'Hola, gracias', 'https://push.example/cleo']]);
+  // each device chooses per space: cleo turns Business off -> only ana is notified; the customer side (personal) is unaffected
+  await as('cleo', () => db.query(`select public.set_push_prefs('https://push.example/cleo', true, false)`));
+  eq((await q(`select endpoint, tag from public.push_payloads($1)`, [m2])).map((r) => r.endpoint), ['https://push.example/ana']);
+  eq((await q(`select tag from public.push_payloads($1)`, [m2]))[0].tag.startsWith('biz-'), true);
+  eq((await q(`select tag from public.push_payloads($1)`, [m1]))[0].tag.startsWith('chat-'), true);
+  await as('eva', () => db.query(`select public.set_push_prefs('https://push.example/eva', false, true)`));
+  eq((await q(`select * from public.push_payloads($1)`, [m1])).length, 0);
+  eq(await as('eva', () => q(`select notify_personal, notify_business from public.get_push_prefs('https://push.example/eva')`)), [{ notify_personal: false, notify_business: true }]);
+  eq(await as('ben', () => q(`select * from public.get_push_prefs('https://push.example/eva')`)), []); // not someone else's device
+  await as('eva', () => db.query(`select public.set_push_prefs('https://push.example/eva', true, true)`));
+  await as('cleo', () => db.query(`select public.set_push_prefs('https://push.example/cleo', true, true)`));
+  // incognito: nothing readable travels
+  const inc = await as('ana', async () => (await q(`select public.start_incognito_chat($1, 'X') as id`, [ids.ben]))[0].id);
+  await as('ana', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'secreto')`, [inc]));
+  const [{ id: m3 }] = await q(`select id from public.messages where conversation_id = $1 and body = 'secreto'`, [inc]);
+  const r3 = await q(`select title, body from public.push_payloads($1)`, [m3]); eq(r3, [{ title: 'CIFRA', body: 'Mensaje nuevo' }]);
+  // muted chats and blocked senders stay silent
+  await as('ben', () => db.query(`update public.conversation_members set muted_until = now() + interval '1 day' where conversation_id = $1 and user_id = auth.uid()`, [inc]));
+  eq((await q(`select * from public.push_payloads($1)`, [m3])).length, 0);
+  // only the server can ask for payloads
+  await as('ben', async () => denied(db.query(`select * from public.push_payloads($1)`, [m3]), 'push_payloads as user'));
+  await as('ben', async () => denied(db.query(`select public.drop_push_endpoint('https://push.example/ben')`), 'drop endpoint as user'));
+  await as('ben', () => db.query(`select public.delete_push_subscription('https://push.example/ben')`));
+  eq((await q(`select count(*)::int as n from public.push_subscriptions where endpoint = 'https://push.example/ben'`))[0].n, 0);
+});
+
+await check('Clientes: el equipo anade una cuenta de CIFRA como cliente (sin chat) y ve su foto; un ajeno no', async () => {
+  const [{ id: gus }] = await q(`insert into auth.users (phone, raw_user_meta_data, phone_confirmed_at) values ('34600000007', '{"display_name":"Gus"}', now()) returning id`); ids.gus = gus;
+  await as('gus', () => db.query(`update public.profiles set avatar_path = auth.uid() || '/me.jpg', username = 'gus_x' where id = auth.uid()`));
+  const cid = await as('cleo', async () => (await q(`select public.add_customer_from_user($1, $2) as id`, [biz, ids.gus]))[0].id);
+  eq((await as('cleo', () => q(`select user_id, name from public.customers where id = $1`, [cid])))[0], { user_id: ids.gus, name: 'Gus' });
+  eq((await as('cleo', () => q(`select public.add_customer_from_user($1, $2) as id`, [biz, ids.gus])))[0].id, cid); // idempotent
+  eq((await as('cleo', () => q(`select avatar_path, username from public.get_profiles(array[$1::uuid])`, [ids.gus])))[0], { avatar_path: `${ids.gus}/me.jpg`, username: 'gus_x' });
+  eq((await as('ben', () => q(`select * from public.get_profiles(array[$1::uuid])`, [ids.gus]))).length, 0); // strangers still see nothing
+  await as('dani', async () => denied(db.query(`select public.add_customer_from_user($1, $2)`, [biz, ids.ben]), 'viewer'));
+  await as('ben', async () => denied(db.query(`select public.add_customer_from_user($1, $2)`, [biz, ids.gus]), 'outsider'));
+  await as('cleo', async () => denied(db.query(`select public.add_customer_from_user($1, $2)`, [biz, ids.ana]), 'team member'));
+  await as('cleo', () => db.query(`update public.customers set name = 'Gustavo', phone = '+34 600 000 007', email = 'gus@example.com' where id = $1`, [cid])); // edit contact
+  eq((await as('cleo', () => q(`select name from public.customers where id = $1`, [cid])))[0].name, 'Gustavo');
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
