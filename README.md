@@ -9,18 +9,20 @@ Mensajería privada con dos espacios a un toque: **Personal** y **Business**. Ex
 ## Qué incluye
 | Personal | Business |
 | --- | --- |
-| Chats 1:1 y grupos en tiempo real; fijar, archivar, marcar como no leído, silenciar | Perfil de negocio con logo, categoría, contacto y visibilidad |
+| Chats 1:1 y grupos en tiempo real; fijar, archivar, marcar como no leído, silenciar | Perfil de negocio con logo, **portada**, **color propio** (5 opciones), categoría, contacto y visibilidad |
+| **Chat incógnito**: sala aparte con nombre, en blanco y negro y tipografía de máquina de escribir; se autodestruye tras 3 h sin actividad o al instante si ambos lo piden, sin dejar rastro | **Publicaciones**: texto, foto o vídeo (7 días) visibles en el perfil público y en los Estados de tus clientes, con botón «Escribir» |
+| **Contacto desconocido**: si te escribe alguien que no tienes guardado, puedes añadirlo, reportarlo o bloquearlo desde el chat | **Escribir a un cliente** desde el CRM (crea el chat aunque solo tengas su teléfono) e **invitar a cualquier cuenta** a una cita, que la acepta desde su chat |
 | Enviado / leído, “escribiendo…”, respuestas, reacciones, editar/eliminar | Bandeja compartida: estados, asignación, filtros, notas internas |
 | Fotos, vídeos y documentos (hasta 25 MB) | Catálogo con fotos y precios (público para clientes) |
 | **Programar mensajes** (los envía el servidor aunque cierres la app) | Saludo automático, mensaje de ausencia, respuestas rápidas |
-| **@usuario** para chatear sin dar tu teléfono; opción de ocultar tu número | Perfil público `/b/<identificador>` con botón “Enviar mensaje” |
-| Búsqueda en todos los mensajes (salta al mensaje), mensajes destacados | Equipo con roles y asignación |
-| Mensajes de voz (grabar, reproducir a 1×/1,5×/2×) | |
+| **@usuario** para chatear sin dar tu teléfono; opción de ocultar tu número. Se encuentra a cualquier cuenta por su @usuario (también por prefijo) y se añade a contactos sin número | Perfil público `/b/<identificador>` con botón “Enviar mensaje”, portada, color y “Novedades” |
+| Búsqueda en todos los mensajes (salta al mensaje), personas por @usuario y negocios; mensajes destacados | Equipo con roles y asignación |
+| Mensajes de voz (grabar, reproducir a 1×/1,5×/2×) | Navegación con animaciones (franja, rebote, tecla Doer) |
 | Llamadas de voz y videollamadas por internet (WebRTC) + pestaña **Llamadas** con historial y perdidas | |
-| Estados de 24 h (texto o foto) | |
+| Estados de 24 h (texto, foto o **vídeo**) + publicaciones de los negocios con los que hablas | |
 | Bloqueo con PIN (6 dígitos), 5 colores de acento, 6 fondos de chat, modo claro/oscuro | |
 | Contactos, bloqueo, silenciar, descubrir por número o por @usuario | Roles: propietario, admin, supervisor, agente, solo lectura |
-| Perfil editable con foto, tema claro/oscuro | Perfil público `/b/<identificador>` con botón “Enviar mensaje” |
+| Perfil editable con foto y **portada**, «Mis citas» (invitaciones de negocios) | |
 
 ## Puesta en marcha
 ```bash
@@ -42,6 +44,7 @@ npm run build:web              # genera dist/ para Netlify
 6. `supabase/migrations/20261024_000006_organize_schedule_username.sql` (activa pg_cron para enviar mensajes programados cada minuto)
 7. `supabase/migrations/20261025_000007_reserved_usernames.sql` (usernames reservados + límite del asistente IA)
 8. `supabase/migrations/20261026_000008_crm_agenda_profiles.sql` (perfil @usuario, teléfono de negocio, CRM, agenda)
+9. `supabase/migrations/20261027_000009_social_incognito_covers.sql` (portadas, color por negocio, chats incógnito con purga por pg_cron cada 5 min, búsqueda por @usuario, chat desde el CRM, invitaciones de cita a cualquier cuenta, publicaciones con vídeo y feed de negocio, reportes)
 
 ### Autenticación
 `EXPO_PUBLIC_PHONE_VERIFICATION`
@@ -57,8 +60,16 @@ npm run build:web              # genera dist/ para Netlify
 ## Dos espacios, dos diseños
 - **Personal («Aurora»)**: violeta eléctrico, modo oscuro negro real, avatares «squircle», burbujas con degradado, barra inferior flotante, títulos en Bricolage Grotesque y 4 fondos de chat propios (Cifra, Aurora, Trama, Noche) o tu imagen.
 - **Business («Ink & Amber»)**: esquinas rectas, mensajes en filas tipo Slack, barra lateral de trabajo, ámbar sobre negro. Incluye **Agenda de citas** (calendario, solicitudes de clientes desde el perfil público, tarjetas en el chat con Confirmar/Cancelar), **Clientes (CRM)** con embudo, etiquetas, notas y tareas, y **Doer**, el asistente que ejecuta tareas (plan → «Hacerlo»). Migración 8; Doer usa `netlify/functions/doer.mts` (`npm run test:doer`, `npm run test:assistant-fn`).
-- Perfiles: `/user/[id]` (personas) y `/b/[id]` (negocios) con su propia cabecera; el teléfono del negocio es opcional (`show_phone`).
+- Perfiles: `/user/[id]` (personas) y `/b/[id]` (negocios) con su propia cabecera y portada editable; el teléfono del negocio es opcional (`show_phone`).
+- Cada negocio elige su **color** (ámbar, cobalto, jade, rubí, orquídea): tiñe la barra, los botones y el perfil público para todo el equipo (`businesses.accent`).
+- **Publicaciones** (`/posts`): texto, foto o vídeo de hasta 90 s que dura 7 días; se ve en el perfil público (“Novedades”) y en la pestaña Estados de quien ya habla con el negocio, con botón «Escribir». Los archivos viven en `chat-media/status/biz/<negocio>/`.
 - Reproductor de vídeo interno (`VideoPlayer.tsx`) y búsqueda por `@` que también encuentra negocios.
+
+## Chat incógnito
+Desde los tres puntos de cualquier chat 1:1: «Chat incógnito con …». Se crea una sala aparte con nombre, en blanco y negro y con tipografía de máquina de escribir (fotos y vídeos siguen a color), para que no se confunda con el chat normal. Se autodestruye tras **3 horas sin mensajes** (cada mensaje renueva el plazo) o **al instante cuando los dos pulsan «Destruir ahora»**. Al destruirse se borran mensajes, archivos, reacciones y destacados para ambos (`request_incognito_destroy`, `purge_incognito` con pg_cron cada 5 min; sin pg_cron la sala se oculta al caducar y se purga en la siguiente ejecución). Dentro del incógnito no hay llamadas, programados ni destacados, y nunca se expone el teléfono.
+
+## Contactos desconocidos
+Si te escribe alguien que no está en tus contactos, el chat muestra una barra con **Añadir**, **Reportar** y **Bloquear** (se puede cerrar y queda recordado en el dispositivo). Reportar pide un motivo, lo guarda en `reports` (solo lo lee quien reporta) y permite bloquear en el mismo paso. También desde el menú del chat, incluso para negocios.
 
 ## Asistente @maestro (Maestro CIFRA)
 Bot oficial dentro de la app (fila fija arriba en *Chats*, también en *Nuevo chat → @usuario → maestro* y en *Ajustes*). Conoce toda la app y explica paso a paso cómo hacer cada cosa.
