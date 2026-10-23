@@ -107,3 +107,8 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 
 ### Migración 12 · avisos separados Personal / Business
 `20261030_000012_push_prefs.sql`: cada dispositivo elige si recibe avisos personales, de Business o ambos (`set_push_prefs` / `get_push_prefs`). Los de Business llevan 💼 en el título y su propia etiqueta, así que no pisan a los personales.
+
+### Vídeos, enlaces y vista previa
+- Al publicar un vídeo (estado o Business) que dura más de 90 s, pesa más de 12 MB o es más nítido que 720p, se abre "Recorta tu vídeo": eliges el tramo y la app lo recodifica en el navegador a 720p con bitrate moderado (mp4 donde el navegador lo permite, webm si no). Va a la velocidad de reproducción y hay que dejar la pestaña abierta.
+- Enlaces en estados y publicaciones: tarjeta con título, descripción e imagen vía `/api/link-preview` (solo usuarios con sesión, nunca redes privadas).
+- Al compartir el enlace de la app salen las etiquetas Open Graph en inglés con `public/og.png`.
