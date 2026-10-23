@@ -98,7 +98,7 @@ const R = {
     apptNoun: /\b(termin|besprechung|besuch|buchung|beratung)\b/, apptVerb: /\b(trage|buche|erstelle|vereinbare|plane|fuge|lege|neuer|neue)\b/,
     task: /(?:erstelle|füge|fuge|neue)\s+(?:eine\s+)?(?:aufgabe|erinnerung)\s*[:\-–]?\s*([\s\S]+)/i, remind: /erinnere mich (?:daran,? )?([\s\S]+)/i,
     product: /(?:füge|fuge|erstelle|neues|veröffentliche|veroffentliche)\s+(?:ein\s+)?(?:produkt|leistung|artikel)\s*[:\-–]?\s*([^\d€$]+?)\s*(?:für|fur|zu|kostet|:)?\s*(\d+(?:[.,]\d{1,2})?)\s*(€|eur|euro|usd|\$|dollar)?/i,
-    customer: /(?:füge|fuge|erstelle|neuer|speichere)\s+(?:einen\s+)?kunden\s*[:\-–]?\s*([^,:\d]+?)(?:\s*[,:]?\s*(?:telefon|handy)?\s*(\+?\d[\d\s]{6,}))?\s*$/i,
+    customer: /(?:füge|fuge|erstelle|neuer|speichere)\s+(?:einen\s+)?kunden\s*[:\-–]?\s*([^,:\d]+?)(?:\s*[,:]?\s*(?:telefon|handy)?\s*(\+?\d[\d\s]{6,}))?(?:\s+hinzu)?\s*$/i,
     move: /\b(?:verschiebe|markiere|setze)\b.*\b(?:zu|auf|als)\s+(gewonnen|verloren|angebot|im gesprach|neu)\b/,
     stages: { gewonnen: 'won', verloren: 'lost', angebot: 'proposal', 'im gesprach': 'contacted', neu: 'lead' } as Record<string, string>,
     open: [[/\b(offne|gehe zu|zeige mir)\b.*\b(kalender|termine)\b/, 'agenda'], [/\b(offne|gehe zu|zeige mir)\b.*\b(kunden|crm)\b/, 'clients'], [/\b(offne|gehe zu|zeige mir)\b.*\b(katalog|produkte)\b/, 'catalog'], [/\b(offne|gehe zu|zeige mir)\b.*\b(posteingang|chats|nachrichten)\b/, 'inbox'], [/\b(offne|gehe zu|zeige mir)\b.*\b(unternehmen|team|profil)\b/, 'business']] as [RegExp, DoerAction extends { screen: infer S } ? S : never][],
