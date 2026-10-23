@@ -45,6 +45,7 @@ npm run build:web              # genera dist/ para Netlify
 7. `supabase/migrations/20261025_000007_reserved_usernames.sql` (usernames reservados + límite del asistente IA)
 8. `supabase/migrations/20261026_000008_crm_agenda_profiles.sql` (perfil @usuario, teléfono de negocio, CRM, agenda)
 9. `supabase/migrations/20261027_000009_social_incognito_covers.sql` (portadas, color por negocio, chats incógnito con purga por pg_cron cada 5 min, búsqueda por @usuario, chat desde el CRM, invitaciones de cita a cualquier cuenta, publicaciones con vídeo y feed de negocio, reportes)
+10. `supabase/migrations/20261028_000010_delivery_receipts.sql` (acuses de entrega: un tick enviado, dos entregado, dos en verde leído; también en la lista de chats)
 
 ### Autenticación
 `EXPO_PUBLIC_PHONE_VERIFICATION`
@@ -64,6 +65,13 @@ npm run build:web              # genera dist/ para Netlify
 - Cada negocio elige su **color** (ámbar, cobalto, jade, rubí, orquídea): tiñe la barra, los botones y el perfil público para todo el equipo (`businesses.accent`).
 - **Publicaciones** (`/posts`): texto, foto o vídeo de hasta 90 s que dura 7 días; se ve en el perfil público (“Novedades”) y en la pestaña Estados de quien ya habla con el negocio, con botón «Escribir». Los archivos viven en `chat-media/status/biz/<negocio>/`.
 - Reproductor de vídeo interno (`VideoPlayer.tsx`) y búsqueda por `@` que también encuentra negocios.
+
+## Avisos, acuses y actualizaciones
+- **Aviso emergente** dentro de la app cuando llega un mensaje de otro chat (verde, con el nombre; toca para abrirlo). Los chats silenciados e incógnito no avisan.
+- **Ticks**: ✓ enviado · ✓✓ gris entregado al dispositivo del otro (`mark_delivered`, se marca al recibir la lista o el mensaje) · ✓✓ verde leído. Igual en el chat y en la lista.
+- **Burbuja verde** de no leídos y borde verde en Estados solo hasta que los abres (se recuerda en el dispositivo).
+- **Arrastra hacia abajo** en el chat (en el extremo de los mensajes nuevos) para recargarlo.
+- **Versión nueva**: `scripts/build-web.sh` sella cada build con `EXPO_PUBLIC_BUILD_ID` y escribe `dist/version.json`; la PWA lo comprueba cada 10 min y al volver a la pestaña, y muestra una franja «Hay una versión nueva · Actualizar».
 
 ## Chat incógnito
 Desde los tres puntos de cualquier chat 1:1: «Chat incógnito con …». Se crea una sala aparte con nombre, en blanco y negro y con tipografía de máquina de escribir (fotos y vídeos siguen a color), para que no se confunda con el chat normal. Se autodestruye tras **3 horas sin mensajes** (cada mensaje renueva el plazo) o **al instante cuando los dos pulsan «Destruir ahora»**. Al destruirse se borran mensajes, archivos, reacciones y destacados para ambos (`request_incognito_destroy`, `purge_incognito` con pg_cron cada 5 min; sin pg_cron la sala se oculta al caducar y se purga en la siguiente ejecución). Dentro del incógnito no hay llamadas, programados ni destacados, y nunca se expone el teléfono.

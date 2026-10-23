@@ -1157,4 +1157,12 @@ export const rows: [string, string, string][] = [
   ["Bloquear", "Block", "Blockieren"],
   ["Reportar negocio", "Report business", "Unternehmen melden"],
   ["Reportar contacto", "Report contact", "Kontakt melden"],
+  // ── v10: avisos, actualización y acuses ──
+  ["Actualizar CIFRA", "Update CIFRA", "CIFRA aktualisieren"],
+  ["Hay una versión nueva de CIFRA", "A new version of CIFRA is available", "Eine neue Version von CIFRA ist da"],
+  ["Actualizar", "Update", "Aktualisieren"],
+  ["Suelta para actualizar", "Release to refresh", "Loslassen zum Aktualisieren"],
+  ["Arrastra para actualizar", "Drag to refresh", "Ziehen zum Aktualisieren"],
+  ["Actualizando…", "Refreshing…", "Wird aktualisiert…"],
+  ["Mensaje nuevo", "New message", "Neue Nachricht"],
 ];

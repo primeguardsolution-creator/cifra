@@ -26,12 +26,15 @@ export function Wordmark({ size = 20 }: { size?: number }) {
   );
 }
 
-export function Badge({ count, tone = 'accent' }: { count: number; tone?: 'accent' | 'muted' }) {
-  const { c } = useTheme();
+/** Unread counters: `new` is the green "message arrived" bubble used in chat lists and tabs. */
+export function Badge({ count, tone = 'new' }: { count: number; tone?: 'accent' | 'muted' | 'new' }) {
+  const { c, incognito } = useTheme();
   if (count <= 0) return null;
+  const bg = tone === 'new' ? (incognito ? c.text : '#1FA67A') : tone === 'accent' ? c.accent : c.borderStrong;
+  const fg = tone === 'new' ? (incognito ? c.bg : '#FFFFFF') : tone === 'accent' ? c.accentText : c.text;
   return (
-    <View style={{ minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: tone === 'accent' ? c.accent : c.borderStrong, alignItems: 'center', justifyContent: 'center' }}>
-      <Txt style={{ fontFamily: font.bold, fontSize: 12, lineHeight: 15, color: tone === 'accent' ? c.accentText : c.text }}>{count > 99 ? '99+' : count}</Txt>
+    <View style={{ minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Txt style={{ fontFamily: font.bold, fontSize: 12, lineHeight: 15, color: fg }}>{count > 99 ? '99+' : count}</Txt>
     </View>
   );
 }

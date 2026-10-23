@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import {
-  Chat, Message, PAGE, PersonCard, Reaction, deleteMessage, editMessage, fetchMemberReads, fetchMessages, fetchReactions, getChat, getProfiles, markRead, sendMessage, setReaction,
+  Chat, MemberReceipt, Message, PAGE, PersonCard, Reaction, deleteMessage, editMessage, fetchMemberReads, fetchMessages, fetchReactions, getChat, getProfiles, markDelivered, markRead, sendMessage, setReaction,
 } from '../../lib/api';
 import { friendly } from '../../lib/errors';
 import { uuid } from '../../lib/format';
@@ -15,7 +15,7 @@ export function useConversation(id: string, me: string) {
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [reads, setReads] = useState<Record<string, string | null>>({});
+  const [reads, setReads] = useState<Record<string, Pick<MemberReceipt, 'last_read_at' | 'last_delivered_at'>>>({});
   const [people, setPeople] = useState<Record<string, PersonCard>>({});
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -57,7 +57,7 @@ export function useConversation(id: string, me: string) {
       if (!meta) { if (incognitoRef.current) setDestroyed(true); else setError('Esta conversación no existe o no tienes acceso.'); return; }
       incognitoRef.current = !!meta.incognito;
       setChat(meta); merge(page); setHasMore(page.length === PAGE); setError(null);
-      setReads(Object.fromEntries(memberReads.map((r) => [r.user_id, r.last_read_at])));
+      setReads(Object.fromEntries(memberReads.map((r) => [r.user_id, { last_read_at: r.last_read_at, last_delivered_at: r.last_delivered_at }])));
       fetchReactions(page.map((m) => m.id)).then((r) => setReactions((prev) => [...prev.filter((x) => !r.some((y) => y.message_id === x.message_id && y.user_id === x.user_id)), ...r])).catch(() => {});
       if (meta.peer_id) resolvePeople([meta.peer_id]);
       ack();
@@ -74,7 +74,7 @@ export function useConversation(id: string, me: string) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` }, (p) => {
         const m = p.new as Message; merge([m]);
         setTyping((t) => { const next = { ...t }; delete next[m.sender_id]; return next; });
-        if (m.sender_id !== me) { const visible = Platform.OS !== 'web' || (typeof document !== 'undefined' && !document.hidden); if (visible) ack(); }
+        if (m.sender_id !== me) { markDelivered(id).catch(() => {}); const visible = Platform.OS !== 'web' || (typeof document !== 'undefined' && !document.hidden); if (visible) ack(); }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` }, (p) => merge([p.new as Message]))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, (p) => {
@@ -86,8 +86,8 @@ export function useConversation(id: string, me: string) {
         });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter: `conversation_id=eq.${id}` }, (p) => {
-        const r = p.new as { user_id: string; last_read_at: string | null };
-        setReads((prev) => ({ ...prev, [r.user_id]: r.last_read_at }));
+        const r = p.new as MemberReceipt;
+        setReads((prev) => ({ ...prev, [r.user_id]: { last_read_at: r.last_read_at, last_delivered_at: r.last_delivered_at } }));
         // incognito: a "destroy now" request from the other side lives on their member row → refresh the flags
         if (incognitoRef.current && r.user_id !== me) getChat(id).then((m) => { if (m) setChat(m); else setDestroyed(true); }).catch(() => {});
       })
@@ -193,12 +193,15 @@ export function useConversation(id: string, me: string) {
     channelRef.current?.send({ type: 'broadcast', event: 'typing', payload: { user_id: me } });
   }, [me]);
 
-  const othersReadAt = useMemo(() => {
-    const times = Object.entries(reads).filter(([u, t]) => u !== me && t).map(([, t]) => t as string);
+  const latest = (pick: (r: Pick<MemberReceipt, 'last_read_at' | 'last_delivered_at'>) => string | null) => {
+    const times = Object.entries(reads).filter(([u]) => u !== me).map(([, r]) => pick(r)).filter((t): t is string => !!t);
     return times.length ? times.sort().pop()! : null;
-  }, [reads, me]);
+  };
+  const othersReadAt = useMemo(() => latest((r) => r.last_read_at), [reads, me]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Delivered to someone else's device (reading implies delivery). */
+  const othersDeliveredAt = useMemo(() => latest((r) => (r.last_delivered_at && r.last_read_at ? (r.last_delivered_at > r.last_read_at ? r.last_delivered_at : r.last_read_at) : r.last_delivered_at ?? r.last_read_at)), [reads, me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const typingNow = Object.entries(typing).filter(([, at]) => Date.now() - at < 4000).map(([u]) => u);
 
-  return { chat, setChat, messages, reactions, people, loading, error, destroyed, hasMore, loadingMore, loadOlder, send, retry, discard, edit, remove, react, notifyTyping, othersReadAt, typingNow, reload: loadInitial };
+  return { chat, setChat, messages, reactions, people, loading, error, destroyed, hasMore, loadingMore, loadOlder, send, retry, discard, edit, remove, react, notifyTyping, othersReadAt, othersDeliveredAt, typingNow, reload: loadInitial };
 }

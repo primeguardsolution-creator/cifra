@@ -77,6 +77,8 @@ await db.exec(migration('20261026_000008_crm_agenda_profiles.sql'));
 await db.exec(migration('20261026_000008_crm_agenda_profiles.sql'));
 await db.exec(migration('20261027_000009_social_incognito_covers.sql'));
 await db.exec(migration('20261027_000009_social_incognito_covers.sql'));
+await db.exec(migration('20261028_000010_delivery_receipts.sql'));
+await db.exec(migration('20261028_000010_delivery_receipts.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -680,6 +682,20 @@ await check('reportes: cada uno archiva los suyos, nunca a sí mismo, y nadie le
     await denied(db.query(`insert into public.reports (reporter_id, reported_id, reason) values ($1, $2, 'falso')`, [ids.ana, ids.dani]), 'as someone else');
   });
   await as('dani', async () => eq((await q(`select * from public.reports`)).length, 0));
+});
+
+console.log('\nAcuses de entrega (v10)');
+await check('un tick al enviar, dos cuando llega al otro dispositivo, dos de color al leer; tambien en la lista de chats', async () => {
+  const cid = await as('ana', async () => (await q(`select public.start_direct_chat($1) as id`, [ids.cleo]))[0].id);
+  await as('ana', async () => {
+    await db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'ping')`, [cid]);
+    const [row] = await q(`select last_delivered, last_read from public.list_chats(null, $1)`, [cid]); eq(row, { last_delivered: false, last_read: false });
+  });
+  await as('cleo', async () => { eq((await q(`select public.mark_delivered() as n`))[0].n >= 1, true); });
+  await as('ana', async () => { const [row] = await q(`select last_delivered, last_read from public.list_chats(null, $1)`, [cid]); eq(row, { last_delivered: true, last_read: false }); });
+  await as('cleo', async () => db.query(`select public.mark_read($1)`, [cid]));
+  await as('ana', async () => { const [row] = await q(`select last_delivered, last_read from public.list_chats(null, $1)`, [cid]); eq(row, { last_delivered: true, last_read: true }); });
+  await as('dani', async () => eq((await q(`select public.mark_delivered($1) as n`, [cid]))[0].n, 0)); // not a member: nothing to mark
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);

@@ -8,6 +8,7 @@ import { Wallpaper } from '../../../components/Wallpaper';
 import { useCall } from '../../../features/calls/CallProvider';
 import { Bubble } from '../../../features/chat/Bubble';
 import { Composer } from '../../../features/chat/Composer';
+import { PullToRefresh } from '../../../features/chat/PullToRefresh';
 import { IncognitoBar, IncognitoGone, IncognitoStartSheet } from '../../../features/chat/Incognito';
 import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/chat/UnknownContact';
 import { VideoModal } from '../../../features/chat/VideoPlayer';
@@ -79,6 +80,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   const [incognitoStart, setIncognitoStart] = useState(false);
   const [report, setReport] = useState(false);
   const list = useRef<FlatList<Row>>(null);
+  const atEnd = useRef(true); // scrolled to the newest message (inverted list: offset 0)
 
   const businessId = chat?.business_id ?? null;
   const myRole = active?.business.id === businessId ? active?.role : undefined;
@@ -199,6 +201,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
     <FlatList
       ref={list} data={rows} inverted keyExtractor={(r) => (r.type === 'msg' ? r.m.id : r.key)}
       keyboardShouldPersistTaps="handled" onEndReached={conv.loadOlder} onEndReachedThreshold={0.4}
+      onScroll={(e) => { atEnd.current = e.nativeEvent.contentOffset.y <= 6; }} scrollEventThrottle={64}
       onScrollToIndexFailed={() => {}}
       contentContainerStyle={{ paddingVertical: 12 }}
       ListFooterComponent={conv.loadingMore ? <ActivityIndicator style={{ margin: 16 }} color={c.accent} /> : conv.hasMore ? null : <Notice incognito={incognito} />}
@@ -212,9 +215,10 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
         const author = agent ? (businessSide && m.sender_id !== me && !m.is_automated ? nameOf(m.sender_id) : undefined) : chat?.kind === 'group' && !mine ? nameOf(m.sender_id) : undefined;
         const target = m.reply_to_id ? byId.get(m.reply_to_id) ?? null : undefined;
         const readable = !!conv.othersReadAt && conv.othersReadAt >= m.created_at;
+        const delivered = readable || (!!conv.othersDeliveredAt && conv.othersDeliveredAt >= m.created_at);
         return (
           <Bubble
-            m={m} mine={mine} me={me} joinedOlder={item.joinedOlder} joinedNewer={item.joinedNewer} read={readable} starred={stars.has(m.id)} highlight={flash === m.id}
+            m={m} mine={mine} me={me} joinedOlder={item.joinedOlder} joinedNewer={item.joinedNewer} read={readable} delivered={delivered} starred={stars.has(m.id)} highlight={flash === m.id}
             showAuthor={!!author && !item.joinedOlder && !m.is_internal} author={author}
             slack={agent} slackName={agent ? (m.sender_id === chat?.peer_id ? chat?.peer_name ?? 'Cliente' : m.is_automated ? chat?.business_name ?? 'Negocio (auto)' : nameOf(m.sender_id)) : undefined} authorId={m.sender_id} authorAvatar={agent ? (m.sender_id === chat?.peer_id ? chat?.peer_avatar : conv.people[m.sender_id]?.avatar_path) : undefined} isCustomer={agent && m.sender_id === chat?.peer_id}
             replyTo={m.reply_to_id ? target : undefined} replyAuthor={target ? nameOf(target.sender_id) : undefined}
@@ -232,7 +236,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {header}
-      <View style={{ flex: 1, backgroundColor: c.bg }}><Wallpaper />{body}</View>
+      <View style={{ flex: 1, backgroundColor: c.bg }}><Wallpaper /><PullToRefresh atEnd={atEnd} onRefresh={async () => { await conv.reload(); refresh(); }}>{body}</PullToRefresh></View>
       {scheduled.length > 0 && (
         <Pressy onPress={() => setSchedOpen(true)} accessibilityRole="button" accessibilityLabel="Ver mensajes programados" scale={0.99} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: c.accentSoft, borderTopWidth: 1, borderTopColor: c.border }}>
           <Icon name="alarm" size={16} color={c.accentSoftText} />

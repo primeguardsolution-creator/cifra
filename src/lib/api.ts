@@ -17,6 +17,8 @@ export type Chat = {
   last_attachment_type: string | null; last_deleted: boolean | null; last_internal: boolean | null; last_at: string | null; unread: number; muted_until: string | null; pinned_at: string | null; archived: boolean; marked_unread: boolean;
   /** Incognito rooms: named, self-destructing after 3 h of silence (`expires_at`) or when both sides ask (`destroy_*`). */
   incognito: boolean; expires_at: string | null; destroy_mine: boolean; destroy_peer: boolean;
+  /** Receipts for the last message when I sent it: delivered to the other device / read by them. */
+  last_delivered: boolean; last_read: boolean;
 };
 
 export type Message = {
@@ -83,6 +85,8 @@ export const INCOGNITO_TTL_MS = 3 * 3600e3;
 export const createGroup = (title: string, members: string[]) => rpc<string>('create_group', { p_title: title, p_members: members });
 export const leaveConversation = (id: string) => rpc<void>('leave_conversation', { p_conv: id });
 export const markRead = (id: string) => rpc<void>('mark_read', { p_conv: id });
+/** "It reached my device": called whenever messages are fetched or received, so the sender sees two ticks. */
+export const markDelivered = (conv?: string | null) => rpc<number>('mark_delivered', { p_conv: conv ?? null });
 export const updateBusinessConversation = (id: string, v: { state?: ConversationState; assigned?: string | null }) =>
   rpc<void>('update_business_conversation', { p_conv: id, p_state: v.state ?? null, p_assigned: v.assigned ?? null, p_unassign: v.assigned === null });
 
@@ -118,8 +122,9 @@ export async function setReaction(messageId: string, userId: string, emoji: stri
   if (!emoji) return unwrap(await supabase.from('message_reactions').delete().eq('message_id', messageId).eq('user_id', userId));
   return unwrap(await supabase.from('message_reactions').upsert({ message_id: messageId, user_id: userId, emoji }));
 }
-export async function fetchMemberReads(conversationId: string): Promise<{ user_id: string; last_read_at: string | null }[]> {
-  return unwrap(await supabase.from('conversation_members').select('user_id, last_read_at').eq('conversation_id', conversationId));
+export type MemberReceipt = { user_id: string; last_read_at: string | null; last_delivered_at: string | null };
+export async function fetchMemberReads(conversationId: string): Promise<MemberReceipt[]> {
+  return unwrap(await supabase.from('conversation_members').select('user_id, last_read_at, last_delivered_at').eq('conversation_id', conversationId));
 }
 
 // ───────── Contacts & blocks ─────────

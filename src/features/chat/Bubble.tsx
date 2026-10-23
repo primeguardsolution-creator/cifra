@@ -14,7 +14,7 @@ import { t, tr } from '../../i18n';
 
 export type BubbleProps = {
   m: Message; mine: boolean; replyTo?: Message | null; replyAuthor?: string; author?: string; showAuthor?: boolean;
-  joinedOlder: boolean; joinedNewer: boolean; read: boolean; reactions: Reaction[]; me: string;
+  joinedOlder: boolean; joinedNewer: boolean; read: boolean; /** Reached the other person's device (two grey ticks). */ delivered?: boolean; reactions: Reaction[]; me: string;
   onOpenActions: (m: Message) => void; onOpenImage: (uri: string) => void; onOpenVideo?: (uri: string) => void; onRetry: (m: Message) => void; onJumpTo?: (id: string) => void;
   onReact: (m: Message, emoji: string) => void; starred?: boolean; highlight?: boolean; onReply?: (m: Message) => void; onCallBack?: (kind: 'audio' | 'video') => void;
   /** Business team view: Slack-style message rows instead of bubbles. */
@@ -215,7 +215,7 @@ function BubbleBase(p: BubbleProps) {
             {p.starred && <Icon name="star" size={11} color={mine && !incognito ? '#F6D77A' : c.warning} />}
             {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>editado</Txt>}
             <Txt v="mono" style={{ color: meta, fontSize: 10 }}>{messageTime(m.created_at)}</Txt>
-            {mine && !deleted && !internal && (m.pending ? <Icon name="time-outline" size={13} color={meta} /> : m.failed ? <Icon name="alert-circle" size={14} color={c.danger} /> : <Icon name={p.read ? 'checkmark-done' : 'checkmark'} size={15} color={p.read && !incognito ? '#7CF0C4' : meta} />)}
+            {mine && !deleted && !internal && (m.pending ? <Icon name="time-outline" size={13} color={meta} /> : m.failed ? <Icon name="alert-circle" size={14} color={c.danger} /> : <Icon name={p.read || p.delivered ? 'checkmark-done' : 'checkmark'} size={15} color={p.read && !incognito ? '#7CF0C4' : meta} />)}
           </View>
         </Pressy>
         {Platform.OS === 'web' && hover && !deleted && !m.pending && (

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
@@ -25,8 +26,14 @@ export default function Updates() {
   const [posts, setPosts] = useState<StatusRow[]>([]);
   const [people, setPeople] = useState<Record<string, PersonCard>>({});
   const [add, setAdd] = useState(false);
-  const [viewing, setViewing] = useState<{ kind: 'person' | 'business'; id: string } | null>(null);
+  const [viewing, setViewingState] = useState<{ kind: 'person' | 'business'; id: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Which statuses you already opened (per author, the newest created_at seen): the green ring only marks new ones.
+  const seenKey = `cifra.statusSeen.${user?.id ?? ''}`;
+  const [seen, setSeen] = useState<Record<string, string>>({});
+  useEffect(() => { AsyncStorage.getItem(seenKey).then((v) => v && setSeen(JSON.parse(v))).catch(() => {}); }, [seenKey]);
+  const markSeen = useCallback((id: string, latest: string) => { setSeen((cur) => { if (cur[id] && cur[id] >= latest) return cur; const next = { ...cur, [id]: latest }; AsyncStorage.setItem(seenKey, JSON.stringify(next)).catch(() => {}); return next; }); }, [seenKey]);
+  const unseen = (id: string, list: StatusRow[]) => list.length > 0 && !(seen[id] && seen[id] >= list[list.length - 1].created_at);
 
   // Businesses you talk to (the ones whose posts show up here), from your own chat list.
   const businesses = useMemo<Biz[]>(() => {
@@ -56,6 +63,10 @@ export default function Updates() {
     return map;
   }, [posts]);
   const mine = groups.get(user?.id ?? '') ?? [];
+  const setViewing = (v: { kind: 'person' | 'business'; id: string } | null) => {
+    if (v) { const list = v.kind === 'business' ? byBiz.get(v.id) ?? [] : v.id === user?.id ? mine : groups.get(v.id) ?? []; if (list.length) markSeen(v.id, list[list.length - 1].created_at); }
+    setViewingState(v);
+  };
   const others = [...groups.entries()].filter(([id]) => id !== user?.id).sort((a, b) => (a[1][a[1].length - 1].created_at < b[1][b[1].length - 1].created_at ? 1 : -1));
   const bizWithPosts = businesses.filter((b) => byBiz.has(b.id)).sort((a, b) => (byBiz.get(a.id)!.at(-1)!.created_at < byBiz.get(b.id)!.at(-1)!.created_at ? 1 : -1));
 
@@ -86,7 +97,7 @@ export default function Updates() {
                 const last = list[list.length - 1];
                 return (
                   <Pressy key={b.id} onPress={() => setViewing({ kind: 'business', id: b.id })} accessibilityRole="button" accessibilityLabel={t('Publicaciones de {name}', { name: b.name })} scale={0.95} style={{ width: 84, alignItems: 'center', gap: 6 }}>
-                    <View style={{ padding: 2.5, borderRadius: 24, borderWidth: 2, borderColor: '#F5A524' }}><Avatar name={b.name} seed={b.id} path={b.logo} size={60} business /></View>
+                    <View style={{ padding: 2.5, borderRadius: 24, borderWidth: 2, borderColor: unseen(b.id, list) ? '#1FA67A' : c.border }}><Avatar name={b.name} seed={b.id} path={b.logo} size={60} business /></View>
                     <Txt v="caption" numberOfLines={1} style={{ textAlign: 'center' }}>{b.name}</Txt>
                     <Txt v="caption" tone="faint" style={{ fontSize: 10 }}>{last.kind === 'video' ? '🎬 ' : ''}{relative(last.created_at)}</Txt>
                   </Pressy>
@@ -102,7 +113,7 @@ export default function Updates() {
           const last = list[list.length - 1];
           return (
             <Pressy key={uid} onPress={() => setViewing({ kind: 'person', id: uid })} scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 16 }}>
-              <Avatar name={p?.display_name} seed={uid} path={p?.avatar_path} size={54} ring />
+              <Avatar name={p?.display_name} seed={uid} path={p?.avatar_path} size={54} ring={unseen(uid, list)} />
               <View style={{ flex: 1 }}><Txt v="bodyStrong">{p?.display_name ?? 'Contacto'}</Txt><Txt v="small" tone="muted">{last.kind === 'video' ? t('🎬 Vídeo · {when}', { when: relative(last.created_at) }) : last.kind === 'image' ? t('📷 Foto · {when}', { when: relative(last.created_at) }) : relative(last.created_at)}</Txt></View>
             </Pressy>
           );
