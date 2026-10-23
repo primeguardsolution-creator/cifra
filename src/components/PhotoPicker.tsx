@@ -4,7 +4,45 @@ import { friendly } from '../lib/errors';
 import { Picked, pickPhoto, uploadMedia } from '../lib/media';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../theme/ThemeProvider';
-import { Avatar, Icon, Pressy, Sheet, SheetRow, useToast } from '../ui';
+import { Avatar, Icon, Pressy, Sheet, SheetRow, Txt, useToast } from '../ui';
+
+/** "Cambiar portada" key for the profile hero: wide (not square) picture, upload, replace and remove. */
+export function CoverPicker({ path, folder, onChange, light }: { path?: string | null; folder: string; onChange: (path: string | null) => Promise<void> | void; light?: boolean }) {
+  const { c } = useTheme();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const removeOld = (old?: string | null) => { if (old && !/^https?:/.test(old)) supabase.storage.from('avatars').remove([old]).catch(() => {}); };
+  const choose = async () => {
+    setOpen(false); setBusy(true);
+    try {
+      const file = await pickPhoto({ max: 1600 });
+      if (!file) return;
+      const next = await uploadMedia('avatars', folder, file);
+      await onChange(next);
+      removeOld(path);
+      toast.show('Portada actualizada', 'success');
+    } catch (e) { toast.show(friendly(e, 'No se pudo cambiar la portada.'), 'error'); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    setOpen(false); setBusy(true);
+    try { await onChange(null); removeOld(path); toast.show('Portada eliminada', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); }
+  };
+  const fg = light ? '#fff' : c.text;
+  return (
+    <>
+      <Pressy onPress={() => setOpen(true)} disabled={busy} accessibilityRole="button" accessibilityLabel="Cambiar portada" scale={0.94}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: light ? 'rgba(0,0,0,0.45)' : c.surface, borderWidth: light ? 0 : 1, borderColor: c.border }}>
+        {busy ? <ActivityIndicator color={fg} size="small" /> : <Icon name="image" size={15} color={fg} />}
+        <Txt v="caption" style={{ color: fg }}>Portada</Txt>
+      </Pressy>
+      <Sheet visible={open} onClose={() => setOpen(false)} title="Foto de portada">
+        <SheetRow icon="images" label="Elegir de la galería" sub="Se recorta al ancho de la pantalla" onPress={choose} />
+        {path ? <SheetRow icon="trash" label="Quitar portada" tone="danger" onPress={remove} /> : null}
+      </Sheet>
+    </>
+  );
+}
 
 type Props = {
   name?: string | null; seed?: string; path?: string | null; size?: number; business?: boolean;

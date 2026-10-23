@@ -22,12 +22,15 @@ export type Appointment = {
   id: string; business_id: string; customer_id: string | null; customer_user_id: string | null; conversation_id: string | null; title: string; notes: string | null;
   starts_at: string; ends_at: string; status: ApptStatus; assigned_to: string | null;
 };
-export type MyAppointment = { id: string; business_id: string; business_name: string; logo_path: string | null; title: string; starts_at: string; ends_at: string; status: ApptStatus };
+export type MyAppointment = { id: string; business_id: string; business_name: string; logo_path: string | null; title: string; starts_at: string; ends_at: string; status: ApptStatus; notes: string | null; conversation_id: string | null; business_handle: string | null };
 
 export const apptMeta: Record<ApptStatus, { label: string; color: string }> = {
   requested: { label: 'Solicitada', color: '#E8890C' }, scheduled: { label: 'Agendada', color: '#6B7CFF' }, confirmed: { label: 'Confirmada', color: '#12A878' },
   done: { label: 'Hecha', color: '#8C8C99' }, cancelled: { label: 'Cancelada', color: '#D6455D' }, no_show: { label: 'No vino', color: '#D6455D' },
 };
+/** An appointment with a CIFRA user is an invitation until that person accepts it ("scheduled" → "confirmed"). */
+export const isPendingInvite = (a: Pick<Appointment, 'status' | 'customer_user_id'>) => a.status === 'scheduled' && !!a.customer_user_id;
+export const apptLabel = (a: Pick<Appointment, 'status' | 'customer_user_id'>) => (isPendingInvite(a) ? 'Pendiente de aceptar' : apptMeta[a.status].label);
 
 const customerCols = 'id, business_id, user_id, name, phone, email, stage, tags, notes, value_minor, last_contact_at, created_at';
 export const crmSync = (businessId: string) => rpc<number>('crm_sync', { p_business: businessId });
@@ -59,8 +62,11 @@ export async function listAppointments(businessId: string, from: Date, to: Date)
 export async function listRequestedAppointments(businessId: string): Promise<Appointment[]> {
   return unwrap<Appointment[]>(await supabase.from('appointments').select(apptCols).eq('business_id', businessId).eq('status', 'requested').order('starts_at').limit(100));
 }
-export const createAppointment = (v: { business: string; customer?: string | null; title: string; start: Date; end: Date; notes?: string; assigned?: string | null }) =>
-  rpc<string>('create_appointment', { p_business: v.business, p_customer: v.customer ?? null, p_title: v.title, p_start: v.start.toISOString(), p_end: v.end.toISOString(), p_notes: v.notes ?? null, p_assigned: v.assigned ?? null });
+/** `user` invites any CIFRA account (person or business owner) — it becomes a customer card and gets the invitation in its chat. */
+export const createAppointment = (v: { business: string; customer?: string | null; user?: string | null; title: string; start: Date; end: Date; notes?: string; assigned?: string | null }) =>
+  rpc<string>('create_appointment', { p_business: v.business, p_customer: v.customer ?? null, p_title: v.title, p_start: v.start.toISOString(), p_end: v.end.toISOString(), p_notes: v.notes ?? null, p_assigned: v.assigned ?? null, p_user: v.user ?? null });
+/** Team: opens (creating it if needed) the business chat with a customer card. Links the card to the account when only the phone was known. */
+export const startCustomerChat = (customerId: string) => rpc<string>('start_customer_chat', { p_customer: customerId });
 export const updateAppointment = (id: string, v: { status?: ApptStatus; start?: Date; end?: Date; title?: string; notes?: string }) =>
   rpc<void>('update_appointment', { p_id: id, p_status: v.status ?? null, p_start: v.start?.toISOString() ?? null, p_end: v.end?.toISOString() ?? null, p_title: v.title ?? null, p_notes: v.notes ?? null });
 export const requestAppointment = (business: string, start: Date, note?: string) => rpc<string>('request_appointment', { p_business: business, p_start: start.toISOString(), p_note: note ?? null });

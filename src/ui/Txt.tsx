@@ -23,7 +23,8 @@ const variants: Record<Variant, TextStyle> = {
 const translate = (n: React.ReactNode): React.ReactNode => (typeof n === 'string' ? tr(n) : Array.isArray(n) ? n.map((x) => (typeof x === 'string' ? tr(x) : x)) : n);
 
 export function Txt({ v = 'body', tone = 'text', style, children, ...props }: TextProps & { v?: Variant; tone?: Tone }) {
-  const { c } = useTheme();
+  const { c, incognito } = useTheme();
   const color = { text: c.text, muted: c.textMuted, faint: c.textFaint, accent: c.accent, danger: c.danger, onAccent: c.accentText, success: c.success }[tone];
-  return <Text {...props} accessibilityLabel={props.accessibilityLabel ? tr(props.accessibilityLabel) : undefined} style={[variants[v], { color }, style]}>{translate(children)}</Text>;
+  // Incognito rooms: every text, whatever the variant or an explicit fontFamily, is set in the typewriter face.
+  return <Text {...props} accessibilityLabel={props.accessibilityLabel ? tr(props.accessibilityLabel) : undefined} style={[variants[v], { color }, style, incognito && { fontFamily: font.typewriter }]}>{translate(children)}</Text>;
 }

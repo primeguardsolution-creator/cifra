@@ -54,7 +54,7 @@ export default function UserProfile() {
         ) : (
           <>
             <ProfileHero
-              kind="person" name={p.display_name} seed={p.id} avatarPath={p.avatar_path} handle={p.username} bio={p.bio}
+              kind="person" name={p.display_name} seed={p.id} avatarPath={p.avatar_path} coverPath={p.cover_path} handle={p.username} bio={p.bio}
               badges={[{ icon: 'person', label: 'Personal' }, ...(since ? [{ icon: 'calendar' as IconName, label: t('En CIFRA desde {when}', { when: since }), tone: 'muted' as const }] : [])]}
               topLeft={<IconButton icon="chevron-back" label="Volver" onPress={back} filled />}
               topRight={p.username ? <IconButton icon="share-social" label="Compartir @usuario" filled onPress={async () => toast.show((await shareText(t('Escribe a {name} en CIFRA: @{u}', { name: p.display_name, u: p.username ?? '' }), appUrl())) === 'copied' ? 'Copiado' : 'Compartido', 'success')} /> : undefined}

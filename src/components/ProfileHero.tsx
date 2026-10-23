@@ -1,8 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Platform, View } from 'react-native';
+import { Image, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { publicAvatarUrl } from '../lib/media';
 import { useTheme } from '../theme/ThemeProvider';
-import { avatarTints } from '../theme/tokens';
+import { avatarTints, bizAccentOptions } from '../theme/tokens';
 import { Avatar, Icon, IconName, Txt } from '../ui';
 
 const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
@@ -11,25 +12,33 @@ export type HeroBadge = { icon: IconName; label: string; tone?: 'accent' | 'warm
 
 /**
  * The profile "cover": same component for your own profile, a friend's and a business, but each wears its own look.
- * People get a soft gradient from their own colours; businesses get an ink slab with an amber signal stripe.
+ * By default people get a soft gradient from their own colours and businesses an ink slab with a signal stripe in the
+ * business colour; both can replace it with their own cover photo (`coverPath`). `bottomRight` hosts the cover picker.
  */
-export function ProfileHero({ kind, name, seed, avatarPath, handle, tagline, bio, badges = [], topLeft, topRight, compact }: {
-  kind: 'person' | 'business'; name: string; seed: string; avatarPath?: string | null; handle?: string | null; tagline?: string | null; bio?: string | null;
-  badges?: HeroBadge[]; topLeft?: React.ReactNode; topRight?: React.ReactNode; compact?: boolean;
+export function ProfileHero({ kind, name, seed, avatarPath, coverPath, accent, handle, tagline, bio, badges = [], topLeft, topRight, bottomRight, compact }: {
+  kind: 'person' | 'business'; name: string; seed: string; avatarPath?: string | null; coverPath?: string | null; accent?: string | null; handle?: string | null; tagline?: string | null; bio?: string | null;
+  badges?: HeroBadge[]; topLeft?: React.ReactNode; topRight?: React.ReactNode; bottomRight?: React.ReactNode; compact?: boolean;
 }) {
   const { c, mode } = useTheme();
   const insets = useSafeAreaInsets();
   const tint = avatarTints[hash(seed) % avatarTints.length];
   const biz = kind === 'business';
-  const height = (compact ? 110 : 168) + insets.top;
+  const height = (compact ? 110 : 168) + insets.top + (coverPath ? 40 : 0);
   const web = Platform.OS === 'web';
+  const cover = publicAvatarUrl(coverPath);
+  const stripe = bizAccentOptions.find((o) => o.key === accent)?.swatch ?? '#F5A524';
   return (
     <View style={{ width: '100%', alignItems: 'center' }}>
       <View style={{ width: '100%', height, overflow: 'hidden', backgroundColor: biz ? '#101009' : tint[1] }}>
-        {biz ? (
+        {cover ? (
+          <>
+            <Image source={{ uri: cover }} resizeMode="cover" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' } as object} accessibilityIgnoresInvertColors />
+            <LinearGradient colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.25)']} style={{ position: 'absolute', inset: 0 } as object} />
+          </>
+        ) : biz ? (
           <>
             <View style={{ position: 'absolute', inset: 0, backgroundColor: '#101009' } as object} />
-            <View style={{ position: 'absolute', left: -40, right: -40, bottom: 28, height: 22, backgroundColor: '#F5A524', transform: [{ rotate: '-4deg' }] }} />
+            <View style={{ position: 'absolute', left: -40, right: -40, bottom: 28, height: 22, backgroundColor: stripe, transform: [{ rotate: '-4deg' }] }} />
             <View style={{ position: 'absolute', left: -40, right: -40, bottom: 8, height: 8, backgroundColor: 'rgba(255,255,255,0.14)', transform: [{ rotate: '-4deg' }] }} />
             {web && <View pointerEvents="none" style={{ position: 'absolute', inset: 0, opacity: 0.5, backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '28px 28px' } as object} />}
           </>
@@ -43,6 +52,7 @@ export function ProfileHero({ kind, name, seed, avatarPath, handle, tagline, bio
         <View style={{ position: 'absolute', top: insets.top + 8, left: 8, right: 8, flexDirection: 'row', justifyContent: 'space-between' }} pointerEvents="box-none">
           <View>{topLeft}</View><View>{topRight}</View>
         </View>
+        {bottomRight && <View style={{ position: 'absolute', right: 12, bottom: compact ? 48 : 60 }}>{bottomRight}</View>}
       </View>
       <View style={{ width: '100%', maxWidth: 640, paddingHorizontal: 18, marginTop: -(compact ? 40 : 52), gap: 10 }}>
         <View style={{ alignSelf: 'flex-start', padding: 4, borderRadius: biz ? 14 : 38, backgroundColor: c.bg }}>

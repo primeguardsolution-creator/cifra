@@ -89,7 +89,7 @@ export default function Agenda() {
             <Pressy key={d.toISOString()} onPress={() => setSelected(startOfDay(d))} accessibilityRole="button" accessibilityLabel={t('{day}, {n} citas', { day: longDay(d), n: list.length })} scale={0.96}
               style={{ width: `${100 / 7}%`, aspectRatio: wide ? 1.25 : width >= 700 ? 1.9 : 1, padding: 4, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: isSel ? c.accentSoft : 'transparent' }}>
               <View style={{ alignSelf: 'flex-start', minWidth: 24, height: 24, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: isToday ? c.highlight : 'transparent' }}>
-                <Txt style={{ fontSize: 13, lineHeight: 16, fontFamily: isToday || isSel ? font.bold : font.medium, color: isToday ? '#16160F' : inMonth ? c.text : c.textFaint }}>{d.getDate()}</Txt>
+                <Txt style={{ fontSize: 13, lineHeight: 16, fontFamily: isToday || isSel ? font.bold : font.medium, color: isToday ? c.highlightText : inMonth ? c.text : c.textFaint }}>{d.getDate()}</Txt>
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
                 {list.slice(0, 4).map((a) => <View key={a.id} style={{ width: 6, height: 6, borderRadius: 1.5, backgroundColor: apptMeta[a.status].color }} />)}

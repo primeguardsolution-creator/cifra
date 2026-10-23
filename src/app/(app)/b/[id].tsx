@@ -59,7 +59,7 @@ export default function BusinessProfile() {
       <ScrollView contentContainerStyle={{ alignItems: 'center', paddingBottom: 50 }}>
         {biz ? (
           <ProfileHero
-            kind="business" name={biz.name} seed={biz.id} avatarPath={biz.logo_path} handle={biz.handle} tagline={biz.category} bio={biz.description}
+            kind="business" name={biz.name} seed={biz.id} avatarPath={biz.logo_path} coverPath={biz.cover_path} accent={biz.accent} handle={biz.handle} tagline={biz.category} bio={biz.description}
             badges={[{ icon: 'storefront', label: 'Business', tone: 'warm' }, ...(biz.catalog.length ? [{ icon: 'pricetags' as const, label: t('{n} en catálogo', { n: biz.catalog.length }), tone: 'muted' as const }] : [])]}
             topLeft={<IconButton icon="chevron-back" label="Volver" onPress={back} filled />}
             topRight={<IconButton icon="share-social" label="Compartir" filled onPress={async () => toast.show((await shareText(t('Escribe a {name} por CIFRA', { name: biz.name }), `${appUrl()}/b/${biz.handle ?? biz.id}`)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success')} />}
