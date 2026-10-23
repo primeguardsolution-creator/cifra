@@ -7,7 +7,7 @@ import { useAuth } from '../state/AuthProvider';
 import { useChats } from '../state/ChatsProvider';
 import { useSpace } from '../state/SpaceProvider';
 import { useTheme } from '../theme/ThemeProvider';
-import { Chip, ChatSkeleton, EmptyState, Field, Icon, IconButton, Pressy, Sheet, SheetRow, Txt, useToast } from '../ui';
+import { Chip, ChatSkeleton, EmptyState, Field, Icon, IconButton, IconName, Pressy, Sheet, SheetRow, Txt, useToast } from '../ui';
 import { friendly } from '../lib/errors';
 import { listAppointments, listRequestedAppointments, startOfDay, addDays } from '../lib/biz';
 import { useEffect } from 'react';
@@ -17,7 +17,8 @@ import { SpaceSwitch } from './SpaceSwitch';
 import { AssistantRow, assistantMatches } from '../features/assistant/AssistantRow';
 import { useAssistantState } from '../features/assistant/store';
 import { InvitationsBanner } from '../features/agenda/Invitations';
-import { t } from '../i18n';
+import { appUrl, inviteMessage, shareText } from '../lib/share';
+import { t, tr } from '../i18n';
 
 type Filter = 'all' | 'unread' | 'groups' | 'mine' | 'unassigned' | 'open' | 'pending' | 'resolved' | 'archived';
 
@@ -71,6 +72,7 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
     });
   }, [chats, q, filter, user?.id]);
 
+  const invite = async () => toast.show((await shareText(inviteMessage, appUrl())) === 'copied' ? 'Invitación copiada' : 'Invitación enviada', 'success');
   const onRefresh = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
 
   const header = (
@@ -84,6 +86,7 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
         ) : <Txt v="h1">Chats</Txt>}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <IconButton icon="search" label="Buscar en todos los mensajes" pop onPress={() => router.push('/search')} />
+          {!business && <IconButton icon="person-add-outline" label="Invitar a alguien a CIFRA" pop onPress={invite} />}
           {!business && <IconButton icon="create-outline" label="Nuevo chat" wiggle onPress={() => router.push('/new-chat')} filled />}
           {business && active && <IconButton icon="share-social" label="Perfil público y enlace para clientes" pop onPress={() => router.push({ pathname: '/b/[id]', params: { id: active.business.id } })} filled />}
         </View>
@@ -103,6 +106,24 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
             </Pressy>
           ))}
         </View>
+      )}
+      {business && active && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} accessibilityLabel="Accesos rápidos del negocio">
+          {([
+            { icon: 'aperture', label: 'Publicar estado', go: '/posts', hot: true },
+            { icon: 'pricetags', label: 'Catálogo', go: '/catalog' },
+            { icon: 'eye', label: 'Mi página', go: `/b/${active.business.id}` },
+            { icon: 'share-social', label: 'Compartir negocio', go: '' },
+            { icon: 'storefront', label: 'Perfil y equipo', go: '/business' },
+          ] as { icon: IconName; label: string; go: string; hot?: boolean }[]).map((a) => (
+            <Pressy key={a.label} accessibilityRole="button" accessibilityLabel={tr(a.label)} scale={0.96}
+              onPress={async () => { if (a.go) router.push(a.go as never); else toast.show((await shareText(t('Escribe a {name} por CIFRA', { name: active.business.name }), `${appUrl()}/b/${active.business.handle ?? active.business.id}`)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success'); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 12, borderRadius: r(8), backgroundColor: a.hot ? c.highlight : c.surface, borderWidth: 1, borderColor: a.hot ? c.highlight : c.border }}>
+              <Icon name={a.icon} size={16} color={a.hot ? c.highlightText : c.highlight} />
+              <Txt v="smallStrong" style={a.hot ? { color: c.highlightText } : undefined}>{a.label}</Txt>
+            </Pressy>
+          ))}
+        </ScrollView>
       )}
       {!(business && loaded && !active) && <><Field value={q} onChangeText={setQ} placeholder={business ? 'Buscar clientes o mensajes' : 'Buscar en tus chats'} icon="search" autoCapitalize="none" style={{ paddingVertical: 10 }} right={q ? <IconButton icon="close-circle" label="Borrar búsqueda" onPress={() => setQ('')} tone="muted" size={30} /> : undefined} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>

@@ -88,8 +88,8 @@ export default function BusinessProfile() {
             kind="business" name={biz.name} seed={biz.id} avatarPath={biz.logo_path} coverPath={biz.cover_path} accent={biz.accent} handle={biz.handle} tagline={biz.category} bio={biz.description}
             badges={[{ icon: 'storefront', label: 'Business', tone: 'warm' }, ...(biz.catalog.length ? [{ icon: 'pricetags' as const, label: t('{n} en catálogo', { n: biz.catalog.length }), tone: 'muted' as const }] : [])]}
             bottomRight={canEdit ? <CoverPicker path={biz.cover_path} folder={`business/${biz.id}`} onChange={saveCover} light /> : undefined}
-            topLeft={<IconButton icon="chevron-back" label="Volver" onPress={back} filled />}
-            topRight={<IconButton icon="share-social" label="Compartir" filled onPress={async () => toast.show((await shareText(t('Escribe a {name} por CIFRA', { name: biz.name }), `${appUrl()}/b/${biz.handle ?? biz.id}`)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success')} />}
+            topLeft={<IconButton icon="chevron-back" label="Volver" onPress={back} glass />}
+            topRight={<IconButton icon="share-social" label="Compartir" glass onPress={async () => toast.show((await shareText(t('Escribe a {name} por CIFRA', { name: biz.name }), `${appUrl()}/b/${biz.handle ?? biz.id}`)) === 'copied' ? 'Enlace copiado' : 'Enlace compartido', 'success')} />}
           />
         ) : <View style={{ height: 120 + insets.top }} />}
         <View style={{ width: '100%', maxWidth: 640, paddingHorizontal: 16, marginTop: 16, gap: 16 }}>

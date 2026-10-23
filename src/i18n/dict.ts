@@ -1205,4 +1205,9 @@ export const rows: [string, string, string][] = [
   ["Centro", "Center", "Mitte"],
   ["Abajo", "Bottom", "Unten"],
   ["Guardar encuadre", "Save framing", "Ausschnitt speichern"],
+  ["Invitar a alguien a CIFRA", "Invite someone to CIFRA", "Jemanden zu CIFRA einladen"],
+  ["Accesos rápidos del negocio", "Business shortcuts", "Schnellzugriffe des Unternehmens"],
+  ["Publicar estado", "Post a status", "Status veröffentlichen"],
+  ["Mi página", "My page", "Meine Seite"],
+  ["Compartir negocio", "Share business", "Unternehmen teilen"],
 ];

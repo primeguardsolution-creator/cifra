@@ -4,7 +4,7 @@ import { useChats } from '../state/ChatsProvider';
 import { useSpace } from '../state/SpaceProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { Space } from '../theme/tokens';
-import { Icon, IconName, Pressy, Txt } from '../ui';
+import { Glass, Icon, IconName, Pressy, Txt } from '../ui';
 import { t, tr } from '../i18n';
 
 const options: { key: Space; label: string; icon: IconName }[] = [
@@ -23,7 +23,8 @@ export function SpaceSwitch() {
   const seg = w > 0 ? (w - 8) / 2 : 0;
 
   return (
-    <View onLayout={(e: LayoutChangeEvent) => setW(e.nativeEvent.layout.width)} accessibilityRole="tablist" style={{ height: 46, borderRadius: 16, backgroundColor: c.sunken, padding: 4, flexDirection: 'row' }}>
+    <View onLayout={(e: LayoutChangeEvent) => setW(e.nativeEvent.layout.width)} accessibilityRole="tablist" style={{ height: 46, borderRadius: 16, padding: 4, flexDirection: 'row' }}>
+      <Glass radius={16} style={{ position: 'absolute', inset: 0 } as object} />
       {seg > 0 && (
         <Animated.View style={{ position: 'absolute', left: 4, top: 4, width: seg, height: 38, borderRadius: 12, backgroundColor: c.accent, transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, seg] }) }], shadowColor: c.accent, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }} />
       )}
