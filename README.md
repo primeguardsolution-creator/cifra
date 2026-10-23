@@ -112,3 +112,6 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 - Al publicar un vídeo (estado o Business) que dura más de 90 s, pesa más de 12 MB o es más nítido que 720p, se abre "Recorta tu vídeo": eliges el tramo y la app lo recodifica en el navegador a 720p con bitrate moderado (mp4 donde el navegador lo permite, webm si no). Va a la velocidad de reproducción y hay que dejar la pestaña abierta.
 - Enlaces en estados y publicaciones: tarjeta con título, descripción e imagen vía `/api/link-preview` (solo usuarios con sesión, nunca redes privadas).
 - Al compartir el enlace de la app salen las etiquetas Open Graph en inglés con `public/og.png`.
+
+### Migración 13 · recordatorio 5 minutos antes de una cita
+`20261031_000013_appointment_reminders.sql`: un trabajo de pg_cron (cada minuto) marca las citas que empiezan en ≤ 5 min y avisa a la función `/api/push` con `{appointment_id}`; reciben push quien creó la cita, la persona asignada y el cliente invitado (según sus avisos Personal/Business). Con la app abierta, `AppointmentReminders` muestra el aviso en pantalla. Mover una cita rearma el recordatorio.

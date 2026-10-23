@@ -9,7 +9,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const b64u = (b: Buffer | Uint8Array) => Buffer.from(b).toString('base64url');
 const unb64u = (s: string) => Buffer.from(s, 'base64url');
 
-type Row = { endpoint: string; p256dh: string; auth: string; title: string; body: string; icon_path: string | null; conversation_id: string; tag: string };
+type Row = { endpoint: string; p256dh: string; auth: string; title: string; body: string; icon_path: string | null; conversation_id: string | null; tag: string; url?: string | null };
 
 /** RFC 8291 "aes128gcm" content encryption of `plain` for one browser subscription. */
 export function encryptPayload(plain: Buffer, p256dh: string, authSecret: string): Buffer {
@@ -45,12 +45,14 @@ export default async (req: Request) => {
   const given = Buffer.from(new URL(req.url).searchParams.get('token') ?? ''); const want = Buffer.from(token);
   if (given.length !== want.length || !timingSafeEqual(given, want)) return json({ error: 'unauthorized' }, 401);
 
-  let messageId = '';
-  try { messageId = String(((await req.json()) as { message_id?: string }).message_id ?? ''); } catch { /* handled below */ }
-  if (!/^[0-9a-f-]{36}$/i.test(messageId)) return json({ error: 'bad_request' }, 400);
+  // A new chat message ({message_id}) or the 5-minute reminder of an appointment ({appointment_id})
+  let messageId = ''; let apptId = '';
+  try { const b = (await req.json()) as { message_id?: string; appointment_id?: string }; messageId = String(b.message_id ?? ''); apptId = String(b.appointment_id ?? ''); } catch { /* handled below */ }
+  const uuid = /^[0-9a-f-]{36}$/i;
+  if (!(apptId ? uuid.test(apptId) : uuid.test(messageId))) return json({ error: 'bad_request' }, 400);
 
   const rest = (fn: string, args: unknown) => fetch(`${supabaseUrl}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, 'content-type': 'application/json' }, body: JSON.stringify(args) });
-  const res = await rest('push_payloads', { p_message: messageId }).catch(() => null);
+  const res = await (apptId ? rest('reminder_payloads', { p_appt: apptId }) : rest('push_payloads', { p_message: messageId })).catch(() => null);
   if (!res || !res.ok) return json({ error: 'supabase_error', status: res?.status ?? 'unreachable' }, 502);
   const rows = (await res.json()) as Row[];
   const subject = env('VAPID_SUBJECT') || 'https://cifra-mensajeria.netlify.app';
@@ -59,7 +61,7 @@ export default async (req: Request) => {
   await Promise.all(rows.map(async (r) => {
     try {
       const payload = Buffer.from(JSON.stringify({
-        title: r.title, body: r.body, tag: r.tag, url: `/chat/${r.conversation_id}`,
+        title: r.title, body: r.body, tag: r.tag, url: r.url ?? (r.conversation_id ? `/chat/${r.conversation_id}` : '/'),
         icon: r.icon_path ? `${supabaseUrl}/storage/v1/object/public/avatars/${r.icon_path}` : '/icon-192.png',
       }));
       const out = await fetch(r.endpoint, {

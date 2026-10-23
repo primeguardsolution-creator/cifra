@@ -1225,4 +1225,6 @@ export const rows: [string, string, string][] = [
   ["Dura {d} · {size} originales", "Lasts {d} · {size} original", "Dauer {d} · {size} Original"],
   ["Preparando… {p}% · no cierres ni cambies de pestaña hasta que termine", "Preparing… {p}% · don't close or switch tabs until it finishes", "Wird vorbereitet… {p}% · Tab nicht schließen oder wechseln, bis es fertig ist"],
   ["Preparar y continuar", "Prepare and continue", "Vorbereiten und weiter"],
+  ["No se pudo comprimir: se sube tal cual.", "Could not compress it: uploading it as it is.", "Komprimieren nicht möglich: Das Video wird unverändert hochgeladen."],
+  ["Dentro de 5 minutos · {time}", "In 5 minutes · {time}", "In 5 Minuten · {time}"],
 ];

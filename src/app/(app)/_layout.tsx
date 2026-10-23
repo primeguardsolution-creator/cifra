@@ -3,6 +3,7 @@ import { View, useWindowDimensions } from 'react-native';
 import { ChatsPane } from '../../components/ChatsPane';
 import { Rail, TabBar, topLevel } from '../../components/Nav';
 import { UpdateBanner } from '../../components/UpdateBanner';
+import { AppointmentReminders } from '../../features/agenda/Reminders';
 import { useEffect } from 'react';
 import { assistantStore } from '../../features/assistant/store';
 import { useAuth } from '../../state/AuthProvider';
@@ -49,6 +50,7 @@ function Frame() {
       )}
       <View style={{ flex: 1 }}>
         <UpdateBanner />
+        <AppointmentReminders />
         <View style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: wide ? 'none' : 'default' }} />
         </View>

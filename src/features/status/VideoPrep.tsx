@@ -45,7 +45,10 @@ export function VideoPrep({ visible, file, info, onClose, onDone }: { visible: b
       if ((out.size ?? 0) > UPLOAD_CAP) throw new Error('El vídeo sigue siendo demasiado pesado: recorta un tramo más corto.');
       onDone(out);
     } catch (e) {
-      if (String((e as Error).message) !== 'cancelled') toast.show(friendly(e, 'No se pudo preparar el vídeo.'), 'error');
+      if (String((e as Error).message) === 'cancelled') return;
+      // This browser cannot re-encode it: publish the original when it fits, otherwise say so
+      if ((file.size ?? 0) <= UPLOAD_CAP) { toast.show('No se pudo comprimir: se sube tal cual.', 'info'); onDone(file); }
+      else toast.show(friendly(e, 'No se pudo preparar el vídeo.'), 'error');
     } finally { setBusy(false); }
   };
   const cancel = () => { signal.current.cancelled = true; if (!busy) onClose(); };
