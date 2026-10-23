@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../lib/supabase';
 import { useTheme } from '../theme/ThemeProvider';
 import { Icon, Pressy, Txt } from '../ui';
 
 const BUILD = process.env.EXPO_PUBLIC_BUILD_ID ?? '';
-const EVERY = 10 * 60_000;
 
 /**
  * PWA: "there is a new version" strip. The build writes `version.json` next to the bundle with the same build id that
- * is baked into the app; when they differ (a newer deploy), a tap reloads. Native builds show nothing.
+ * is baked into the app; when they differ (a newer deploy), a tap reloads. No polling: the file is read once when the
+ * app opens or the tab comes back, and again the moment a deploy announces itself (realtime insert in `app_releases`,
+ * see netlify/functions/release.mts). Native builds show nothing.
  */
 export function UpdateBanner() {
   const { c } = useTheme();
@@ -27,10 +29,11 @@ export function UpdateBanner() {
       } catch { /* offline: try later */ }
     };
     check();
-    const timer = setInterval(check, EVERY);
     const vis = () => { if (typeof document !== 'undefined' && !document.hidden) check(); };
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', vis);
-    return () => { live = false; clearInterval(timer); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', vis); };
+    // a deploy just finished: give the CDN a few seconds and read the stamp
+    const channel = supabase.channel('app-releases').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'app_releases' }, () => setTimeout(check, 8000)).subscribe();
+    return () => { live = false; supabase.removeChannel(channel); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', vis); };
   }, []);
   if (!fresh) return null;
   return (

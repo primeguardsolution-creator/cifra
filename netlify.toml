@@ -15,6 +15,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/release"
+  to = "/.netlify/functions/release"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/doer"
   to = "/.netlify/functions/doer"
   status = 200

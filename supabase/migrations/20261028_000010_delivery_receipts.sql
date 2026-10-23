@@ -109,3 +109,22 @@ $q$;
 
 revoke execute on all functions in schema public from public, anon;
 grant execute on function public.mark_read(uuid), public.mark_delivered(uuid), public.list_chats(uuid, uuid) to authenticated;
+
+-- - App releases: one row per deploy (inserted by netlify/functions/release.mts with the service role). The app listens
+--   in realtime and shows "new version available" at once, instead of polling. Clients can only read.
+create table if not exists public.app_releases (
+  id uuid primary key default gen_random_uuid(),
+  build text not null,
+  note text,
+  created_at timestamptz not null default now()
+);
+alter table public.app_releases enable row level security;
+revoke all on public.app_releases from anon, authenticated;
+grant select on public.app_releases to authenticated;
+drop policy if exists "releases: everyone reads" on public.app_releases;
+create policy "releases: everyone reads" on public.app_releases for select to authenticated using (true);
+do $$
+begin
+  execute 'alter publication supabase_realtime add table public.app_releases';
+exception when duplicate_object then null;
+end $$;
