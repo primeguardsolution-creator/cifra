@@ -16,6 +16,8 @@ import { ModePreference, useTheme } from '../../theme/ThemeProvider';
 import { Avatar, Card, Divider, Icon, IconName, Pressy, SectionLabel, Sheet, SheetRow, Toggle, Txt, useToast } from '../../ui';
 import { updateMyProfile } from '../../lib/api';
 import { friendly } from '../../lib/errors';
+import { SafetySheet, safetySummary } from '../../features/auth/AccountSafety';
+import { RecoveryStatus, recoveryStatus } from '../../lib/recovery';
 import { PushPrefs, PushStatus, disablePush, enablePush, getPushPrefs, pushStatus, setPushPrefs } from '../../lib/push';
 import { pickWallpaperImage } from '../../lib/media';
 import { getLocale, getLocalePref, setLocalePref, t, tr } from '../../i18n';
@@ -48,9 +50,12 @@ export default function Settings() {
   const [blocked, setBlocked] = useState<PersonCard[]>([]);
   const [push, setPush] = useState<PushStatus>('unsupported');
   const [pushBusy, setPushBusy] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
+  const [safety, setSafety] = useState<RecoveryStatus | null>(null);
   const [prefs, setPrefs] = useState<PushPrefs>({ personal: true, business: true });
   const [langSheet, setLangSheet] = useState(false);
 
+  useEffect(() => { recoveryStatus().then(setSafety).catch(() => {}); }, []);
   useEffect(() => { if (Platform.OS === 'web') pushStatus().then((st) => { setPush(st); if (st === 'on') getPushPrefs().then(setPrefs); }).catch(() => {}); }, []);
   const openBlocked = async () => {
     setBlockedOpen(true);
@@ -172,6 +177,7 @@ export default function Settings() {
             <Row icon="star" title="Mensajes destacados" sub="Los que guardaste para encontrarlos rápido" onPress={() => router.push('/starred')} />
             <Divider inset={66} />
             <Row icon="calendar" title="Mis citas" sub="Invitaciones de negocios y citas aceptadas" onPress={() => router.push('/my-appointments')} />
+            <Divider inset={66} /><Row icon="shield-checkmark" title="Seguridad de la cuenta" sub={safetySummary(safety) || 'Correo y código para recuperar tu acceso'} onPress={() => setSafetyOpen(true)} />
             {lock.available && <><Divider inset={66} /><Row icon="keypad" title="Bloqueo con PIN" sub={lock.enabled ? 'Activado · se bloquea tras 1 minuto fuera de la app' : t('Protege CIFRA con un PIN de {n} dígitos', { n: PIN_DIGITS })} right={<Toggle value={lock.enabled} label="Bloqueo con PIN" onChange={(v) => { setPinError(null); setFirstPin(''); setPinSheet(v ? 'new' : 'off'); }} />} /></>}
             {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="notifications" title="Avisos de mensajes personales"
               sub={push === 'needs-install' ? 'En iPhone, añade CIFRA a la pantalla de inicio para recibirlas' : push === 'denied' ? 'Bloqueadas en los ajustes del teléfono' : push === 'unsupported' ? 'Tu navegador no las admite' : push === 'not-configured' ? 'Pendiente de activar en el servidor' : push === 'on' && prefs.personal ? 'Activados: te avisan aunque la app esté cerrada' : 'Chats, grupos y negocios que te escriben'}
@@ -204,6 +210,7 @@ export default function Settings() {
         </View>
       </Sheet>
 
+      <SafetySheet visible={safetyOpen} onClose={() => setSafetyOpen(false)} onChanged={setSafety} />
       <Sheet visible={langSheet} onClose={() => setLangSheet(false)} title="Elige el idioma de CIFRA">
         {([['auto', 'Automático (según tu dispositivo)'], ['es', 'Español'], ['en', 'English'], ['de', 'Deutsch']] as const).map(([k, label]) => (
           <SheetRow key={k} icon={k === 'auto' ? 'phone-portrait' : 'language'} label={label} right={getLocalePref() === k ? <Icon name="checkmark-circle" tone="accent" /> : undefined} onPress={() => { setLangSheet(false); setLocalePref(k); }} />

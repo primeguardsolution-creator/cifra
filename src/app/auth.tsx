@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { friendly } from '../lib/errors';
 import { Country, countries, countryMatches, countryName, flag, formatPhone, toE164 } from '../lib/phone';
+import { RecoverFlow } from '../features/auth/RecoverFlow';
 import { useAuth } from '../state/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { radius } from '../theme/tokens';
@@ -28,6 +29,7 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [codeFor, setCodeFor] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [cooldown, setCooldown] = useState(0);
   const phoneRef = useRef<TextInput>(null);
@@ -84,12 +86,14 @@ export default function Auth() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', padding: 20 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={{ width: '100%', maxWidth: 440, gap: 22 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <IconButton icon="chevron-back" label="Volver" onPress={() => (codeFor ? setCodeFor(null) : router.canGoBack() ? router.back() : router.replace('/'))} />
+              <IconButton icon="chevron-back" label="Volver" onPress={() => (recovering ? setRecovering(null) : codeFor ? setCodeFor(null) : router.canGoBack() ? router.back() : router.replace('/'))} />
               <Wordmark size={15} />
               <View style={{ width: 40 }} />
             </View>
 
-            {codeFor ? (
+            {recovering ? (
+              <RecoverFlow phone={recovering} onBack={() => setRecovering(null)} onDone={async (pwd) => { await signIn(recovering, pwd); router.replace('/chats'); }} />
+            ) : codeFor ? (
               <View style={{ gap: 20, paddingTop: 8 }}>
                 <View style={{ gap: 8 }}>
                   <Txt v="h1">Confirma tu número</Txt>
@@ -147,6 +151,13 @@ export default function Auth() {
                 {error && <Txt v="small" tone="danger" accessibilityLiveRegion="polite">{error}</Txt>}
 
                 <Button title={isRegister ? 'Crear cuenta' : 'Entrar'} size="lg" loading={busy} onPress={submit} iconRight="arrow-forward" />
+                {!isRegister && (
+                  <Button title="¿Olvidaste tu contraseña?" variant="ghost" onPress={() => {
+                    const parsed = toE164(country, phone);
+                    if (!parsed.ok) return setError('Escribe tu número de teléfono y vuelve a pulsar «¿Olvidaste tu contraseña?».');
+                    setError(null); setRecovering(parsed.e164);
+                  }} />
+                )}
               </View>
             )}
           </View>

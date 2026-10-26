@@ -115,3 +115,8 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 
 ### Migración 13 · recordatorio 5 minutos antes de una cita
 `20261031_000013_appointment_reminders.sql`: un trabajo de pg_cron (cada minuto) marca las citas que empiezan en ≤ 5 min y avisa a la función `/api/push` con `{appointment_id}`; reciben push quien creó la cita, la persona asignada y el cliente invitado (según sus avisos Personal/Business). Con la app abierta, `AppointmentReminders` muestra el aviso en pantalla. Mover una cita rearma el recordatorio.
+
+### Migración 14 · recuperar la cuenta (olvidé mi contraseña)
+- `20261101_000014_account_recovery.sql` + función Netlify `/api/recovery`: correo verificado con código de 6 dígitos (Brevo) y código de recuperación de un solo uso (XXXX-XXXX-XXXX). Todo se guarda con hash; 5 intentos por código, caducidad de 10 min, 5 envíos por hora, bloqueo de 15 min.
+- Variables Netlify (scope Functions): `BREVO_API_KEY`, `MAIL_FROM_EMAIL` (remitente verificado en Brevo), opcional `MAIL_FROM_NAME`, `RECOVERY_PEPPER` (cadena larga al azar), y las que ya existen: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+- En la app: «¿Olvidaste tu contraseña?» en Iniciar sesión; Ajustes → Seguridad de la cuenta; al entrar, quien no tenga código de recuperación ve el aviso (se puede posponer 3 días).
