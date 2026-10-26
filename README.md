@@ -135,3 +135,6 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 - `20261104_000017_moderation.sql`: panel de moderación (Ajustes → Moderación, solo para administradores de la plataforma). Para hacerte administrador, en el SQL Editor: `insert into public.platform_admins (user_id) select id from public.profiles where phone = '+TU_NUMERO';`. Permite revisar, descartar reportes y suspender/reactivar cuentas (`auth.users.banned_until`); todo queda en `moderation_log`.
 - `20261105_000018_disappearing_messages.sql`: temporizador por chat directo o de grupo (24 h, 7 d, 90 d). Los mensajes caducados se ocultan al instante y un job de pg_cron los borra cada minuto.
 - Control de errores: Sentry (`@sentry/react`, solo web) en `src/lib/monitoring.ts`; DSN público, sin datos personales, solo el id de cuenta.
+
+### Migración 19 · encuestas
+`20261106_000019_polls.sql`: encuestas en chats directos y de grupo (2 a 6 opciones, una o varias respuestas, voto privado, solo la persona que la creó puede cerrarla). Se adjuntan desde «+» → Encuesta.

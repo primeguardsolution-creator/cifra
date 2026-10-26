@@ -1,10 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Image, Linking, PanResponder, Platform, View } from 'react-native';
 import { hapticSoft, hapticSuccess } from '../../lib/haptics';
-import { Message, Reaction } from '../../lib/api';
+import { Message, PollData, Reaction } from '../../lib/api';
 import { bytes, messageTime } from '../../lib/format';
 import { signedMediaUrl } from '../../lib/media';
 import { useTheme } from '../../theme/ThemeProvider';
+import { PollCard } from './PollCard';
 import { Avatar, Icon, Pressy, Txt } from '../../ui';
 import { parseApptCard } from '../../lib/biz';
 import { ApptCard } from './ApptCard';
@@ -20,6 +21,7 @@ export type BubbleProps = {
   /** Business team view: Slack-style message rows instead of bubbles. */
   slack?: boolean; slackName?: string; authorId?: string; authorAvatar?: string | null; isCustomer?: boolean;
   /** Customer side of a broadcast: stop receiving broadcasts from this business. */ onBroadcastOptOut?: () => void;
+  /** Poll messages: the poll with its counts, and what to do on a vote / when the author closes it. */ poll?: PollData | null; onVotePoll?: (pollId: string, optionId: string, on: boolean) => void; onClosePoll?: (pollId: string) => void;
 };
 
 const urlRe = /(https?:\/\/[^\s]+)/g;
@@ -211,7 +213,8 @@ function BubbleBase(p: BubbleProps) {
                   </View>
                   {p.onCallBack && <Pressy onPress={() => p.onCallBack!(m.body!.startsWith('📹') ? 'video' : 'audio')} accessibilityRole="button" accessibilityLabel="Devolver la llamada" scale={0.9} style={{ paddingHorizontal: 11, height: 30, borderRadius: 15, backgroundColor: mine ? 'rgba(255,255,255,0.18)' : c.accent, justifyContent: 'center' }}><Txt v="caption" style={{ color: mine ? c.bubbleOutText : c.accentText, fontFamily: 'Inter_600SemiBold' }}>{mine ? 'Repetir' : 'Devolver'}</Txt></Pressy>}
                 </View>
-              ) : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
+              ) : m.poll_id && p.poll ? <PollCard poll={p.poll} mine={mine} light={mine && !incognito} onVote={(o, on) => p.onVotePoll?.(p.poll!.id, o, on)} onClose={() => p.onClosePoll?.(p.poll!.id)} />
+              : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
             </>
           )}
           {m.is_broadcast && !mine && p.onBroadcastOptOut && !deleted && <Pressy onPress={p.onBroadcastOptOut} accessibilityRole="button" scale={0.97} style={{ marginTop: 6, alignSelf: 'flex-start' }}><Txt v="caption" style={{ color: c.accent, textDecorationLine: 'underline' }}>No recibir más difusiones de este negocio</Txt></Pressy>}

@@ -95,6 +95,8 @@ await db.exec(migration('20261104_000017_moderation.sql'));
 await db.exec(migration('20261104_000017_moderation.sql'));
 await db.exec(migration('20261105_000018_disappearing_messages.sql'));
 await db.exec(migration('20261105_000018_disappearing_messages.sql'));
+await db.exec(migration('20261106_000019_polls.sql'));
+await db.exec(migration('20261106_000019_polls.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -975,6 +977,38 @@ await check('Mensajes temporales: temporizador por chat, los caducados se oculta
   eq((await as('ana', () => q(`select public.get_disappearing($1) as s`, [g])))[0].s, null);
   // not for business chats
   await as('eva', async () => denied(db.query(`select public.set_disappearing($1, 86400)`, [ids._evaConv]), 'business chat'));
+});
+
+await check('Encuestas: se crean en un chat, un voto por persona (o varios), recuentos para todos y nada para ajenos', async () => {
+  const g = await as('ana', async () => (await q(`select public.create_group('Votacion', $1) as id`, [[ids.ben]]))[0].id);
+  await as('cleo', async () => denied(db.query(`select public.create_poll($1, 'Cena?', array['Pizza','Sushi'])`, [g]), 'outsider creates'));
+  await as('ana', async () => denied(db.query(`select public.create_poll($1, 'Cena?', array['Solo una'])`, [g]), 'one option'));
+  await as('ana', async () => denied(db.query(`select public.create_poll($1, 'Cena?', array['1','2','3','4','5','6','7'])`, [g]), 'seven options'));
+  const pid = await as('ana', async () => (await q(`select public.create_poll($1, 'Cena?', array['Pizza','Sushi','Tacos']) as id`, [g]))[0].id);
+  eq((await q(`select count(*)::int as n from public.messages where poll_id = $1 and body like '%Cena?'`, [pid]))[0].n, 1);
+  const opts = (await as('ben', () => q(`select options from public.get_polls(array[$1::uuid])`, [pid])))[0].options;
+  eq(opts.map((o) => o.label), ['Pizza', 'Sushi', 'Tacos']);
+  const [pizza, sushi] = [opts[0].id, opts[1].id];
+  await as('ana', () => db.query(`select public.vote_poll($1, $2)`, [pid, pizza]));
+  await as('ben', () => db.query(`select public.vote_poll($1, $2)`, [pid, pizza]));
+  await as('ben', () => db.query(`select public.vote_poll($1, $2)`, [pid, sushi])); // single choice: moves his vote
+  const res = await as('ana', () => q(`select options, voters, mine_created from public.get_polls(array[$1::uuid])`, [pid]));
+  eq(res[0].options.map((o) => [o.votes, o.mine]), [[1, true], [1, false], [0, false]]);
+  eq(res[0].voters, 2); eq(res[0].mine_created, true);
+  await as('cleo', async () => eq((await q(`select * from public.get_polls(array[$1::uuid])`, [pid])).length, 0)); // outsiders do not even see it
+  await as('cleo', async () => denied(db.query(`select public.vote_poll($1, $2)`, [pid, pizza]), 'outsider votes'));
+  await as('ben', () => db.query(`select public.vote_poll($1, $2, false)`, [pid, sushi])); // withdraw
+  eq((await as('ana', () => q(`select voters from public.get_polls(array[$1::uuid])`, [pid])))[0].voters, 1);
+  // multiple choice keeps several answers
+  const mp = await as('ana', async () => (await q(`select public.create_poll($1, 'Dias?', array['Lun','Mar'], true) as id`, [g]))[0].id);
+  const mo = (await as('ana', () => q(`select options from public.get_polls(array[$1::uuid])`, [mp])))[0].options;
+  for (const o of mo) await as('ben', () => db.query(`select public.vote_poll($1, $2)`, [mp, o.id]));
+  eq((await as('ben', () => q(`select options from public.get_polls(array[$1::uuid])`, [mp])))[0].options.map((o) => o.mine), [true, true]);
+  // only the author closes it; nobody votes after that
+  await as('ben', async () => denied(db.query(`select public.close_poll($1)`, [pid]), 'not the author'));
+  await as('ana', () => db.query(`select public.close_poll($1)`, [pid]));
+  await as('ben', async () => denied(db.query(`select public.vote_poll($1, $2)`, [pid, pizza]), 'closed'));
+  await as('ben', async () => denied(db.query(`select * from public.poll_votes`), 'votes table is private'));
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
