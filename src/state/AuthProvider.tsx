@@ -2,6 +2,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Profile, getMyProfile } from '../lib/api';
 import { friendly } from '../lib/errors';
+import { setMonitoringUser } from '../lib/monitoring';
 import { aliasEmail, phoneFromAlias } from '../lib/phone';
 import { isSupabaseConfigured, phoneVerification, supabase } from '../lib/supabase';
 
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!isSupabaseConfigured) { setReady(true); return; }
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       // Never await Supabase calls inside this callback (it holds the auth lock).
+      setMonitoringUser(session?.user?.id ?? null);
       setUser(session?.user ? { id: session.user.id, phone: toPhone(session.user.phone) ?? phoneFromAlias(session.user.email) } : null);
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_OUT') setReady(true);
       if (event === 'SIGNED_OUT') setProfile(null);

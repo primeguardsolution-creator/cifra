@@ -1,10 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Image, Linking, PanResponder, Platform, View } from 'react-native';
 import { hapticSoft, hapticSuccess } from '../../lib/haptics';
-import { Message, Reaction } from '../../lib/api';
+import { Message, PollData, Reaction } from '../../lib/api';
 import { bytes, messageTime } from '../../lib/format';
 import { signedMediaUrl } from '../../lib/media';
 import { useTheme } from '../../theme/ThemeProvider';
+import { PollCard } from './PollCard';
 import { Avatar, Icon, Pressy, Txt } from '../../ui';
 import { parseApptCard } from '../../lib/biz';
 import { ApptCard } from './ApptCard';
@@ -19,6 +20,8 @@ export type BubbleProps = {
   onReact: (m: Message, emoji: string) => void; starred?: boolean; highlight?: boolean; onReply?: (m: Message) => void; onCallBack?: (kind: 'audio' | 'video') => void;
   /** Business team view: Slack-style message rows instead of bubbles. */
   slack?: boolean; slackName?: string; authorId?: string; authorAvatar?: string | null; isCustomer?: boolean;
+  /** Customer side of a broadcast: stop receiving broadcasts from this business. */ onBroadcastOptOut?: () => void;
+  /** Poll messages: the poll with its counts, and what to do on a vote / when the author closes it. */ poll?: PollData | null; onVotePoll?: (pollId: string, optionId: string, on: boolean) => void; onClosePoll?: (pollId: string) => void;
 };
 
 const urlRe = /(https?:\/\/[^\s]+)/g;
@@ -130,6 +133,7 @@ function BubbleBase(p: BubbleProps) {
               <Txt v="mono" tone="faint">{messageTime(m.created_at)}</Txt>
               {m.edited_at && !deleted && <Txt v="caption" tone="faint">(editado)</Txt>}
               {m.is_automated && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="flash" size={10} color={c.highlight} /><Txt v="mono" tone="faint">AUTOMÁTICO</Txt></View>}
+              {m.is_broadcast && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="megaphone" size={10} color={c.highlight} /><Txt v="mono" tone="faint">DIFUSIÓN</Txt></View>}
             </View>
           )}
           <View style={internal ? { borderLeftWidth: 3, borderLeftColor: c.internalBorder, backgroundColor: c.internal, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2, borderRadius: 3 } : undefined}>
@@ -185,6 +189,7 @@ function BubbleBase(p: BubbleProps) {
         >
           {internal && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}><Icon name="lock-closed" size={11} tone="muted" /><Txt v="mono" tone="muted">NOTA INTERNA{p.author ? ` · ${p.author}` : ''}</Txt></View>}
           {m.is_automated && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}><Icon name="flash" size={11} color={mine ? c.bubbleOutMeta : c.highlight} /><Txt v="mono" style={{ color: meta }}>RESPUESTA AUTOMÁTICA</Txt></View>}
+          {m.is_broadcast && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}><Icon name="megaphone" size={11} color={mine ? c.bubbleOutMeta : c.highlight} /><Txt v="mono" style={{ color: meta }}>DIFUSIÓN</Txt></View>}
           {p.showAuthor && p.author && !internal && <Txt v="smallStrong" style={{ color: c.highlight, marginBottom: 2 }}>{p.author}</Txt>}
           {p.replyTo !== undefined && m.reply_to_id && (
             <Pressy onPress={() => p.onJumpTo?.(m.reply_to_id!)} scale={0.99} style={{ borderLeftWidth: 3, borderLeftColor: c.highlight, backgroundColor: mine ? 'rgba(255,255,255,0.12)' : c.surfaceAlt, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 6 }}>
@@ -208,9 +213,11 @@ function BubbleBase(p: BubbleProps) {
                   </View>
                   {p.onCallBack && <Pressy onPress={() => p.onCallBack!(m.body!.startsWith('📹') ? 'video' : 'audio')} accessibilityRole="button" accessibilityLabel="Devolver la llamada" scale={0.9} style={{ paddingHorizontal: 11, height: 30, borderRadius: 15, backgroundColor: mine ? 'rgba(255,255,255,0.18)' : c.accent, justifyContent: 'center' }}><Txt v="caption" style={{ color: mine ? c.bubbleOutText : c.accentText, fontFamily: 'Inter_600SemiBold' }}>{mine ? 'Repetir' : 'Devolver'}</Txt></Pressy>}
                 </View>
-              ) : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
+              ) : m.poll_id && p.poll ? <PollCard poll={p.poll} mine={mine} light={mine && !incognito} onVote={(o, on) => p.onVotePoll?.(p.poll!.id, o, on)} onClose={() => p.onClosePoll?.(p.poll!.id)} />
+              : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
             </>
           )}
+          {m.is_broadcast && !mine && p.onBroadcastOptOut && !deleted && <Pressy onPress={p.onBroadcastOptOut} accessibilityRole="button" scale={0.97} style={{ marginTop: 6, alignSelf: 'flex-start' }}><Txt v="caption" style={{ color: c.accent, textDecorationLine: 'underline' }}>No recibir más difusiones de este negocio</Txt></Pressy>}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 3 }}>
             {p.starred && <Icon name="star" size={11} color={mine && !incognito ? '#F6D77A' : c.warning} />}
             {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>editado</Txt>}

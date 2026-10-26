@@ -21,7 +21,7 @@ const items: BizItem[] = [
   { href: '/clients', label: 'Clientes', icon: 'people-outline', iconOn: 'people' },
   { href: '/more', label: 'Más', icon: 'grid-outline', iconOn: 'grid' },
 ];
-const moreRoutes = ['/more', '/catalog', '/business', '/settings', '/posts'];
+const moreRoutes = ['/more', '/catalog', '/business', '/settings', '/posts', '/broadcast'];
 const isActive = (href: string, path: string) => (href === '/more' ? moreRoutes.includes(path) : href === '/inbox' ? path === '/inbox' || path.startsWith('/chat/') : path === href);
 const native = Platform.OS !== 'web';
 
@@ -155,6 +155,7 @@ export function BizSidebar() {
       {label('NEGOCIO')}
       <View style={{ gap: 2 }}>
         <SideRow icon="aperture" label="Publicaciones" href="/posts" on={path === '/posts'} />
+        <SideRow icon="megaphone" label="Difusión" href="/broadcast" on={path === '/broadcast'} />
         <SideRow icon="pricetags" label="Catálogo" href="/catalog" on={path === '/catalog'} />
         <SideRow icon="storefront" label="Perfil y equipo" href="/business" on={path === '/business'} />
         <SideRow icon="settings" label="Ajustes" href="/settings" on={path === '/settings'} />

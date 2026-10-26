@@ -16,7 +16,7 @@ create role anon nologin; create role authenticated nologin; create role service
 create schema auth;
 create table auth.users (
   id uuid primary key default gen_random_uuid(), email text unique, phone text unique,
-  raw_user_meta_data jsonb not null default '{}', phone_confirmed_at timestamptz
+  raw_user_meta_data jsonb not null default '{}', phone_confirmed_at timestamptz, banned_until timestamptz
 );
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
@@ -89,6 +89,14 @@ await db.exec(migration('20261101_000014_account_recovery.sql'));
 await db.exec(migration('20261101_000014_account_recovery.sql'));
 await db.exec(migration('20261102_000015_delete_account.sql'));
 await db.exec(migration('20261102_000015_delete_account.sql'));
+await db.exec(migration('20261103_000016_broadcasts.sql'));
+await db.exec(migration('20261103_000016_broadcasts.sql'));
+await db.exec(migration('20261104_000017_moderation.sql'));
+await db.exec(migration('20261104_000017_moderation.sql'));
+await db.exec(migration('20261105_000018_disappearing_messages.sql'));
+await db.exec(migration('20261105_000018_disappearing_messages.sql'));
+await db.exec(migration('20261106_000019_polls.sql'));
+await db.exec(migration('20261106_000019_polls.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -880,6 +888,127 @@ await check('Borrar mi cuenta: se va todo lo mio, lo compartido se queda y un ne
   eq((await q(`select created_by from public.conversations where id = $1`, [g]))[0].created_by, ids.ana); // ana inherits the group
   eq((await q(`select body from public.messages where conversation_id = $1 order by created_at`, [g])).map((r) => r.body), ['de ana']); // zed's messages are gone, ana's stay
   await as('ana', async () => eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1`, [g]))[0].n, 1));
+});
+
+await check('Difusion: solo la direccion, solo a clientes con cuenta que no se dieron de baja; limites diarios', async () => {
+  const mk = async (phone, name) => (await q(`insert into auth.users (phone, raw_user_meta_data, phone_confirmed_at) values ($1, $2, now()) returning id`, [phone, JSON.stringify({ display_name: name })]))[0].id;
+  const u1 = await mk('34600000095', 'Cli Uno'); const u2 = await mk('34600000096', 'Cli Dos'); ids.cli1 = u1; ids.cli2 = u2;
+  for (const [u, n, st] of [[u1, 'Cli Uno', 'lead'], [u2, 'Cli Dos', 'won']]) await q(`insert into public.customers (business_id, user_id, name, stage) values ($1, $2, $3, $4)`, [biz, u, n, st]);
+  await q(`insert into public.customers (business_id, name) values ($1, 'Sin cuenta')`, [biz]); // a manual contact without an account cannot be reached
+  await as('cleo', async () => denied(db.query(`select * from public.broadcast_audience($1)`, [biz]), 'agent audience'));
+  await as('cleo', async () => denied(db.query(`select public.send_broadcast($1, 'hola')`, [biz]), 'agent send'));
+  await as('dani', async () => denied(db.query(`select public.send_broadcast($1, 'hola')`, [biz]), 'viewer send'));
+  const before = (await as('ana', () => q(`select reachable from public.broadcast_audience($1)`, [biz])))[0].reachable;
+  eq((await as('ana', () => q(`select total, reachable from public.broadcast_audience($1, 'won')`, [biz])))[0], { total: 1, reachable: 1 });
+  await as('ana', async () => denied(db.query(`select public.send_broadcast($1, '   ')`, [biz]), 'empty'));
+  // customer two leaves the list with one tap (their own switch)
+  await as('cli2', () => db.query(`select public.broadcast_optout($1, true)`, [biz]));
+  eq((await as('cli2', () => q(`select public.get_broadcast_optout($1) as o`, [biz])))[0].o, true);
+  eq((await as('cli1', () => q(`select public.get_broadcast_optout($1) as o`, [biz])))[0].o, false);
+  const sent = await as('ana', async () => (await q(`select public.send_broadcast($1, 'Rebajas de otono') as n`, [biz]))[0].n);
+  eq(sent, before - 1);
+  eq((await q(`select count(*)::int as n from public.messages where is_broadcast and body = 'Rebajas de otono'`))[0].n, sent);
+  const mine = (id) => q(`select count(*)::int as n from public.messages m join public.conversations c on c.id = m.conversation_id where m.is_broadcast and c.customer_id = $1`, [id]);
+  eq((await mine(u1))[0].n, 1);
+  eq((await mine(u2))[0].n, 0);
+  await as('cli1', async () => eq((await q(`select count(*)::int as n from public.messages where is_broadcast`))[0].n, 1)); // sees only their own chat
+  // customer one also leaves; the next broadcast reaches one fewer; coming back works too
+  await as('cli1', () => db.query(`select public.broadcast_optout($1, true)`, [biz]));
+  eq(await as('ana', async () => (await q(`select public.send_broadcast($1, 'Segunda') as n`, [biz]))[0].n), before - 2);
+  await as('cli1', () => db.query(`select public.broadcast_optout($1, false)`, [biz]));
+  eq(await as('ana', async () => (await q(`select public.send_broadcast($1, 'Tercera') as n`, [biz]))[0].n), before - 1);
+  // daily limit: 3 per business
+  await as('ana', async () => denied(db.query(`select public.send_broadcast($1, 'Cuarta')`, [biz]), 'daily limit'));
+  eq((await as('ana', () => q(`select count(*)::int as n from public.list_broadcasts($1)`, [biz])))[0].n, 3);
+  await as('cleo', async () => denied(db.query(`select * from public.list_broadcasts($1)`, [biz]), 'history for agents'));
+  await as('ben', async () => denied(db.query(`select * from public.broadcasts`), 'table is private'));
+});
+
+await check('Moderacion: solo administradores de la plataforma ven reportes, los resuelven y suspenden cuentas', async () => {
+  const mk = async (phone, name) => (await q(`insert into auth.users (phone, raw_user_meta_data, phone_confirmed_at) values ($1, $2, now()) returning id`, [phone, JSON.stringify({ display_name: name })]))[0].id;
+  const adm = await mk('34600000097', 'Admin'); const bad = await mk('34600000098', 'Molesto'); ids.adm = adm; ids.bad = bad;
+  await q(`insert into public.platform_admins (user_id) values ($1)`, [adm]);
+  await as('eva', () => db.query(`insert into public.reports (reporter_id, reported_id, reason) values (auth.uid(), $1, 'Spam o publicidad')`, [bad]));
+  await as('ben', () => db.query(`insert into public.reports (reporter_id, reported_id, reason) values (auth.uid(), $1, 'Acoso')`, [bad]));
+  // ordinary people see nothing of other people's reports and cannot call the admin functions
+  await as('eva', async () => denied(db.query(`select * from public.admin_list_reports()`), 'reports as user'));
+  await as('eva', async () => denied(db.query(`select public.admin_set_suspended($1, true)`, [bad]), 'suspend as user'));
+  eq((await as('eva', () => q(`select public.is_platform_admin() as a`)))[0].a, false);
+  eq((await as('adm', () => q(`select public.is_platform_admin() as a`)))[0].a, true);
+  const open = await as('adm', () => q(`select reason, reported_name, reports_against, suspended, status from public.admin_list_reports() where reported_name = 'Molesto'`));
+  eq(open.length, 2); eq(open[0].reports_against, 2); eq(open[0].suspended, false); eq(open[0].reported_name, 'Molesto');
+  // review one, then suspend
+  const rid = (await as('adm', () => q(`select id from public.admin_list_reports() where reason = 'Acoso'`)))[0].id;
+  await as('adm', () => db.query(`select public.admin_review_report($1, 'reviewed', 'Lo estoy mirando')`, [rid]));
+  eq((await as('adm', () => q(`select count(*)::int as n from public.admin_list_reports('open') where reported_name = 'Molesto'`)))[0].n, 1);
+  await as('adm', async () => denied(db.query(`select public.admin_review_report($1, 'borrado')`, [rid]), 'invalid status'));
+  await as('adm', () => db.query(`select public.admin_set_suspended($1, true, 'spam repetido')`, [bad]));
+  eq((await q(`select banned_until > now() as b from auth.users where id = $1`, [bad]))[0].b, true);
+  eq((await as('adm', () => q(`select count(*)::int as n from public.admin_list_reports('open') where reported_name = 'Molesto'`)))[0].n, 0); // pending ones are now actioned
+  eq((await as('adm', () => q(`select suspended from public.admin_list_reports('actioned') where reported_name = 'Molesto' limit 1`)))[0].suspended, true);
+  await as('adm', async () => denied(db.query(`select public.admin_set_suspended($1, true)`, [adm]), 'cannot suspend admin'));
+  await as('adm', () => db.query(`select public.admin_set_suspended($1, false)`, [bad]));
+  eq((await q(`select banned_until is null as b from auth.users where id = $1`, [bad]))[0].b, true);
+  eq((await q(`select count(*)::int as n from public.moderation_log`))[0].n >= 3, true);
+  await as('adm', async () => denied(db.query(`select * from public.moderation_log`), 'log is private'));
+});
+
+await check('Mensajes temporales: temporizador por chat, los caducados se ocultan al instante y se borran; ni negocios ni ajenos', async () => {
+  const g = await as('ana', async () => (await q(`select public.create_group('Efimero', $1) as id`, [[ids.ben]]))[0].id);
+  eq((await as('ana', () => q(`select public.get_disappearing($1) as s`, [g])))[0].s, null);
+  await as('cleo', async () => denied(db.query(`select public.set_disappearing($1, 86400)`, [g]), 'outsider sets timer'));
+  await as('ana', async () => denied(db.query(`select public.set_disappearing($1, 12345)`, [g]), 'invalid timer'));
+  await as('ana', () => db.query(`select public.set_disappearing($1, 86400)`, [g]));
+  eq((await as('ben', () => q(`select public.get_disappearing($1) as s`, [g])))[0].s, 86400); // any member sees it
+  await as('cleo', async () => eq((await q(`select public.get_disappearing($1) as s`, [g]))[0].s, null)); // an outsider learns nothing
+  // new messages carry an expiry, the notice line does not
+  await as('ana', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'se borra manana')`, [g]));
+  const rows = await q(`select body, expires_at is not null as exp, is_automated from public.messages where conversation_id = $1 order by created_at`, [g]);
+  eq(rows.map((r) => [r.is_automated, r.exp]), [[true, false], [false, true]]);
+  // once expired it vanishes for the members at once, then the job deletes it
+  await q(`update public.messages set expires_at = now() - interval '1 second' where conversation_id = $1 and body = 'se borra manana'`, [g]);
+  await as('ben', async () => eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and body = 'se borra manana'`, [g]))[0].n, 0));
+  eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and body = 'se borra manana'`, [g]))[0].n, 1); // still stored until the job runs
+  eq((await q(`select public.purge_expired_messages() as n`))[0].n >= 1, true);
+  eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and body = 'se borra manana'`, [g]))[0].n, 0);
+  await as('ben', async () => denied(db.query(`select public.purge_expired_messages()`), 'purge as user'));
+  // switching it off
+  await as('ben', () => db.query(`select public.set_disappearing($1, 0)`, [g]));
+  eq((await as('ana', () => q(`select public.get_disappearing($1) as s`, [g])))[0].s, null);
+  // not for business chats
+  await as('eva', async () => denied(db.query(`select public.set_disappearing($1, 86400)`, [ids._evaConv]), 'business chat'));
+});
+
+await check('Encuestas: se crean en un chat, un voto por persona (o varios), recuentos para todos y nada para ajenos', async () => {
+  const g = await as('ana', async () => (await q(`select public.create_group('Votacion', $1) as id`, [[ids.ben]]))[0].id);
+  await as('cleo', async () => denied(db.query(`select public.create_poll($1, 'Cena?', array['Pizza','Sushi'])`, [g]), 'outsider creates'));
+  await as('ana', async () => denied(db.query(`select public.create_poll($1, 'Cena?', array['Solo una'])`, [g]), 'one option'));
+  await as('ana', async () => denied(db.query(`select public.create_poll($1, 'Cena?', array['1','2','3','4','5','6','7'])`, [g]), 'seven options'));
+  const pid = await as('ana', async () => (await q(`select public.create_poll($1, 'Cena?', array['Pizza','Sushi','Tacos']) as id`, [g]))[0].id);
+  eq((await q(`select count(*)::int as n from public.messages where poll_id = $1 and body like '%Cena?'`, [pid]))[0].n, 1);
+  const opts = (await as('ben', () => q(`select options from public.get_polls(array[$1::uuid])`, [pid])))[0].options;
+  eq(opts.map((o) => o.label), ['Pizza', 'Sushi', 'Tacos']);
+  const [pizza, sushi] = [opts[0].id, opts[1].id];
+  await as('ana', () => db.query(`select public.vote_poll($1, $2)`, [pid, pizza]));
+  await as('ben', () => db.query(`select public.vote_poll($1, $2)`, [pid, pizza]));
+  await as('ben', () => db.query(`select public.vote_poll($1, $2)`, [pid, sushi])); // single choice: moves his vote
+  const res = await as('ana', () => q(`select options, voters, mine_created from public.get_polls(array[$1::uuid])`, [pid]));
+  eq(res[0].options.map((o) => [o.votes, o.mine]), [[1, true], [1, false], [0, false]]);
+  eq(res[0].voters, 2); eq(res[0].mine_created, true);
+  await as('cleo', async () => eq((await q(`select * from public.get_polls(array[$1::uuid])`, [pid])).length, 0)); // outsiders do not even see it
+  await as('cleo', async () => denied(db.query(`select public.vote_poll($1, $2)`, [pid, pizza]), 'outsider votes'));
+  await as('ben', () => db.query(`select public.vote_poll($1, $2, false)`, [pid, sushi])); // withdraw
+  eq((await as('ana', () => q(`select voters from public.get_polls(array[$1::uuid])`, [pid])))[0].voters, 1);
+  // multiple choice keeps several answers
+  const mp = await as('ana', async () => (await q(`select public.create_poll($1, 'Dias?', array['Lun','Mar'], true) as id`, [g]))[0].id);
+  const mo = (await as('ana', () => q(`select options from public.get_polls(array[$1::uuid])`, [mp])))[0].options;
+  for (const o of mo) await as('ben', () => db.query(`select public.vote_poll($1, $2)`, [mp, o.id]));
+  eq((await as('ben', () => q(`select options from public.get_polls(array[$1::uuid])`, [mp])))[0].options.map((o) => o.mine), [true, true]);
+  // only the author closes it; nobody votes after that
+  await as('ben', async () => denied(db.query(`select public.close_poll($1)`, [pid]), 'not the author'));
+  await as('ana', () => db.query(`select public.close_poll($1)`, [pid]));
+  await as('ben', async () => denied(db.query(`select public.vote_poll($1, $2)`, [pid, pizza]), 'closed'));
+  await as('ben', async () => denied(db.query(`select * from public.poll_votes`), 'votes table is private'));
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);

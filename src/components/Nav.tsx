@@ -28,9 +28,9 @@ export const navItems: Record<Space, Item[]> = {
     { href: '/more', label: 'Más', icon: 'grid-outline', iconOn: 'grid' },
   ],
 };
-export const topLevel = ['/chats', '/updates', '/calls', '/contacts', '/settings', '/inbox', '/catalog', '/business', '/agenda', '/clients', '/doer', '/more', '/posts'];
+export const topLevel = ['/chats', '/updates', '/calls', '/contacts', '/settings', '/inbox', '/catalog', '/business', '/agenda', '/clients', '/doer', '/more', '/posts', '/broadcast'];
 /** Screens that live under the Business "Más" tab. */
-export const moreRoutes = ['/more', '/catalog', '/business', '/settings', '/posts'];
+export const moreRoutes = ['/more', '/catalog', '/business', '/settings', '/posts', '/broadcast'];
 
 export type BadgeKind = 'chats' | 'inbox' | 'calls' | 'statuses' | 'agenda' | 'invites';
 /** Count shown in the bubble of a nav item: unread chats, missed calls, new statuses, appointment invitations / requests. */

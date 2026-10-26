@@ -111,6 +111,7 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} accessibilityLabel="Accesos rápidos del negocio">
           {([
             { icon: 'aperture', label: 'Publicar estado', go: '/posts', hot: true },
+            { icon: 'megaphone', label: 'Difusión', go: '/broadcast' },
             { icon: 'pricetags', label: 'Catálogo', go: '/catalog' },
             { icon: 'eye', label: 'Mi página', go: `/b/${active.business.id}` },
             { icon: 'share-social', label: 'Compartir negocio', go: '' },

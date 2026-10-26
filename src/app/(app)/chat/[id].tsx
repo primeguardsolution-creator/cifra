@@ -14,6 +14,9 @@ import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/
 import { VideoModal } from '../../../features/chat/VideoPlayer';
 import { ConversationState, Message, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
+import { broadcastOptOut } from '../../../lib/biz';
+import { PollSheet } from '../../../features/chat/PollSheet';
+import { PollData, closePoll, disappearingFor, getPolls, setDisappearing, votePoll } from '../../../lib/api';
 import { dayLabel } from '../../../lib/format';
 import { WIDE } from '../../../lib/layout';
 import { formatPhone } from '../../../lib/phone';
@@ -59,7 +62,19 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   const { patch, refresh } = useChats();
   const { active } = useSpace();
   const call = useCall();
-  const { chat, messages } = conv;
+  const { chat } = conv;
+  // disappearing messages: hide what has expired (the server deletes it a little later)
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const tick = setInterval(() => setNow(Date.now()), 20_000); return () => clearInterval(tick); }, []);
+  const messages = useMemo(() => conv.messages.filter((x) => !x.expires_at || new Date(x.expires_at).getTime() > now), [conv.messages, now]);
+  const [timer, setTimer] = useState<number | null>(null);
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [polls, setPolls] = useState<Record<string, PollData>>({});
+  const [pollOpen, setPollOpen] = useState(false);
+  const pollIds = useMemo(() => messages.map((x) => x.poll_id).filter((x): x is string => !!x), [messages]);
+  const loadPolls = useCallback(() => { if (pollIds.length) getPolls(pollIds).then((r) => setPolls(Object.fromEntries(r.map((x) => [x.id, x])))).catch(() => {}); }, [pollIds]);
+  useEffect(() => { loadPolls(); if (!pollIds.length) return; const every = setInterval(loadPolls, 8000); return () => clearInterval(every); }, [loadPolls, pollIds.length]);
+  useEffect(() => { if (id) disappearingFor(id).then(setTimer).catch(() => {}); }, [id, timerOpen]);
   const agent = chat?.perspective === 'agent';
 
   const [actionFor, setActionFor] = useState<Message | null>(null);
@@ -224,6 +239,8 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
             replyTo={m.reply_to_id ? target : undefined} replyAuthor={target ? nameOf(target.sender_id) : undefined}
             reactions={conv.reactions.filter((x) => x.message_id === m.id)}
             onOpenActions={setActionFor} onOpenImage={setViewer} onOpenVideo={setVideo} onJumpTo={jumpTo} onReply={(x) => { setReplyTo(x); setEditing(null); }} onCallBack={call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && !incognito ? (kind) => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, kind) : undefined}
+            poll={m.poll_id ? polls[m.poll_id] ?? null : null} onVotePoll={(pid, oid, on) => { votePoll(pid, oid, on).then(loadPolls).catch((e) => toast.show(friendly(e), 'error')); }} onClosePoll={(pid) => { closePoll(pid).then(loadPolls).catch((e) => toast.show(friendly(e), 'error')); }}
+            onBroadcastOptOut={!agent && chat?.kind === 'business' && chat.business_id ? () => { broadcastOptOut(chat.business_id!).then(() => toast.show('Listo: no recibirás más difusiones de este negocio', 'success')).catch((e) => toast.show(friendly(e), 'error')); } : undefined}
             onRetry={(x) => guard(() => conv.retry(x))} onReact={(x, e) => guard(() => conv.react(x.id, conv.reactions.some((r) => r.message_id === x.id && r.user_id === me && r.emoji === e) ? null : e))}
           />
         );
@@ -253,6 +270,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
           replyTo={replyTo} replyAuthor={replyTo ? nameOf(replyTo.sender_id) : undefined} onCancelReply={() => setReplyTo(null)}
           editing={editing} onCancelEdit={() => setEditing(null)} onTyping={conv.notifyTyping}
           onSchedule={incognito ? undefined : async (body, at, replyTo, internal) => { await scheduleMessage(me, { conversation_id: id, body, send_at: at.toISOString(), reply_to_id: replyTo, is_internal: internal }); loadScheduled(); }}
+          onPoll={(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito ? () => setPollOpen(true) : undefined}
           onSend={(v) => guard(() => conv.send({ body: v.body, file: v.file, internal: v.internal, replyTo: v.replyTo }))}
           onEditSave={(mid, text) => { setEditing(null); guard(() => conv.edit(mid, text)); }}
         />
@@ -295,6 +313,14 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
         <SheetRow icon="close-circle" label="Quitar asignación" onPress={() => assign(null)} />
       </Sheet>
 
+      <PollSheet visible={pollOpen} conversationId={id} onClose={() => setPollOpen(false)} onCreated={() => { conv.reload(); setTimeout(loadPolls, 600); }} />
+      <Sheet visible={timerOpen} onClose={() => setTimerOpen(false)} title="Mensajes temporales">
+        <Txt v="small" tone="muted" style={{ marginBottom: 6 }}>Los mensajes nuevos de este chat se borran solos pasado este tiempo, para todos. Los anteriores no cambian.</Txt>
+        {([[0, 'Desactivados'], [86400, '24 horas'], [604800, '7 días'], [7776000, '90 días']] as [number, string][]).map(([secs, label]) => (
+          <SheetRow key={secs} icon={(timer ?? 0) === secs ? 'radio-button-on' : 'radio-button-off'} label={label} onPress={async () => { setTimerOpen(false); try { await setDisappearing(id, secs); setTimer(secs || null); toast.show(secs ? 'Mensajes temporales activados' : 'Mensajes temporales desactivados', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />
+        ))}
+      </Sheet>
+
       <Sheet visible={menu} onClose={() => setMenu(false)} title={chat ? chatTitle(chat) : undefined}>
         {chat && (
           <View style={{ alignItems: 'center', gap: 6, paddingVertical: 10 }}>
@@ -304,6 +330,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
             {incognito && <Txt v="caption" tone="muted" style={{ textAlign: 'center', maxWidth: 320, fontFamily: font.typewriter }}>Blanco y negro, máquina de escribir: así sabes que esto se autodestruye.</Txt>}
           </View>
         )}
+        {(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito && <SheetRow icon="hourglass" label="Mensajes temporales" sub={timer ? ({ 86400: '24 horas', 604800: '7 días', 7776000: '90 días' } as Record<number, string>)[timer] : 'Desactivados'} onPress={() => { setMenu(false); setTimerOpen(true); }} />}
         {!incognito && <SheetRow icon="search" label="Buscar en mensajes" onPress={() => { setMenu(false); router.push('/search'); }} />}
         {chat?.kind === 'business' && !agent && chat.business_id && <SheetRow icon="storefront" label="Ver perfil y catálogo" onPress={() => { setMenu(false); router.push({ pathname: '/b/[id]', params: { id: chat.business_id! } }); }} />}
         {directPeer && !incognito && !blocked && (

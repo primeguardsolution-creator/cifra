@@ -26,7 +26,7 @@ export type Chat = {
 export type Message = {
   id: string; conversation_id: string; sender_id: string; body: string | null; attachment_path: string | null; attachment_type: string | null;
   attachment_name: string | null; attachment_size: number | null; attachment_duration_ms: number | null; reply_to_id: string | null; edited_at: string | null; deleted_at: string | null;
-  created_at: string; is_internal: boolean; is_automated: boolean; pending?: boolean; failed?: boolean; localUri?: string;
+  created_at: string; is_internal: boolean; is_automated: boolean; is_broadcast?: boolean; expires_at?: string | null; poll_id?: string | null; pending?: boolean; failed?: boolean; localUri?: string;
 };
 export type Reaction = { message_id: string; user_id: string; emoji: string };
 
@@ -93,7 +93,7 @@ export const updateBusinessConversation = (id: string, v: { state?: Conversation
   rpc<void>('update_business_conversation', { p_conv: id, p_state: v.state ?? null, p_assigned: v.assigned ?? null, p_unassign: v.assigned === null });
 
 // ───────── Messages ─────────
-const messageCols = 'id, conversation_id, sender_id, body, attachment_path, attachment_type, attachment_name, attachment_size, attachment_duration_ms, reply_to_id, edited_at, deleted_at, created_at, is_internal, is_automated';
+const messageCols = 'id, conversation_id, sender_id, body, attachment_path, attachment_type, attachment_name, attachment_size, attachment_duration_ms, reply_to_id, edited_at, deleted_at, created_at, is_internal, is_automated, is_broadcast, expires_at, poll_id';
 export const PAGE = 40;
 export async function fetchMessages(conversationId: string, before?: string): Promise<Message[]> {
   let q = supabase.from('messages').select(messageCols).eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(PAGE);
@@ -238,3 +238,14 @@ export async function countMissedCalls(me: string, since: string): Promise<numbe
   if (error) return 0;
   return count ?? 0;
 }
+
+// ── Disappearing messages ──
+export const disappearingFor = (conversationId: string) => rpc<number | null>('get_disappearing', { p_conv: conversationId });
+export const setDisappearing = (conversationId: string, seconds: number) => rpc<void>('set_disappearing', { p_conv: conversationId, p_seconds: seconds });
+
+// ── Polls ──
+export type PollData = { id: string; conversation_id: string; question: string; multiple: boolean; closed: boolean; mine_created: boolean; voters: number; options: { id: string; label: string; votes: number; mine: boolean }[] };
+export const createPoll = (conversationId: string, question: string, options: string[], multiple: boolean) => rpc<string>('create_poll', { p_conv: conversationId, p_question: question, p_options: options, p_multiple: multiple });
+export const votePoll = (pollId: string, optionId: string, on: boolean) => rpc<void>('vote_poll', { p_poll: pollId, p_option: optionId, p_on: on });
+export const closePoll = (pollId: string) => rpc<void>('close_poll', { p_poll: pollId });
+export const getPolls = (ids: string[]) => (ids.length ? rpc<PollData[]>('get_polls', { p_ids: ids }) : Promise.resolve([] as PollData[]));

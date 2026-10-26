@@ -16,6 +16,7 @@ import { ModePreference, useTheme } from '../../theme/ThemeProvider';
 import { Avatar, Card, Divider, Icon, IconName, Pressy, SectionLabel, Sheet, SheetRow, Toggle, Txt, useToast } from '../../ui';
 import { updateMyProfile } from '../../lib/api';
 import { friendly } from '../../lib/errors';
+import { isPlatformAdmin } from '../../lib/moderation';
 import { DeleteAccountSheet } from '../../features/settings/DeleteAccountSheet';
 import { AppIconSheet } from '../../features/settings/AppIconSheet';
 import { SafetySheet, safetySummary } from '../../features/auth/AccountSafety';
@@ -55,6 +56,8 @@ export default function Settings() {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [iconOpen, setIconOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { isPlatformAdmin().then(setIsAdmin).catch(() => {}); }, []);
   const [safety, setSafety] = useState<RecoveryStatus | null>(null);
   const [prefs, setPrefs] = useState<PushPrefs>({ personal: true, business: true });
   const [langSheet, setLangSheet] = useState(false);
@@ -182,6 +185,7 @@ export default function Settings() {
             <Divider inset={66} />
             <Row icon="calendar" title="Mis citas" sub="Invitaciones de negocios y citas aceptadas" onPress={() => router.push('/my-appointments')} />
             {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="color-palette" title="Icono de la app" sub="Elige entre 5 épocas del mismo diseño" onPress={() => setIconOpen(true)} /></>}
+            {isAdmin && <><Divider inset={66} /><Row icon="flag" title="Moderación" sub="Reportes de contactos y negocios" onPress={() => router.push('/moderation')} /></>}
             <Divider inset={66} /><Row icon="shield-checkmark" title="Seguridad de la cuenta" sub={safetySummary(safety) || 'Correo y código para recuperar tu acceso'} onPress={() => setSafetyOpen(true)} />
             {lock.available && <><Divider inset={66} /><Row icon="keypad" title="Bloqueo con PIN" sub={lock.enabled ? 'Activado · se bloquea tras 1 minuto fuera de la app' : t('Protege CIFRA con un PIN de {n} dígitos', { n: PIN_DIGITS })} right={<Toggle value={lock.enabled} label="Bloqueo con PIN" onChange={(v) => { setPinError(null); setFirstPin(''); setPinSheet(v ? 'new' : 'off'); }} />} /></>}
             {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="notifications" title="Avisos de mensajes personales"
