@@ -1322,4 +1322,6 @@ export const rows: [string, string, string][] = [
   ["Un mensaje a todos tus clientes con cuenta · máx. 3 al día", "One message to all your customers with an account · max. 3 a day", "Eine Nachricht an alle Kunden mit Konto · max. 3 pro Tag"],
   ["DIFUSIÓN", "BROADCAST", "RUNDSENDUNG"],
   ["No recibir más difusiones de este negocio", "Stop receiving broadcasts from this business", "Keine Rundsendungen mehr von diesem Unternehmen"],
+  ["Algo salió mal", "Something went wrong", "Etwas ist schiefgelaufen"],
+  ["Ya nos llegó el aviso del error. Inténtalo de nuevo.", "We already got the error report. Try again.", "Der Fehlerbericht ist bei uns angekommen. Versuche es erneut."],
 ];
