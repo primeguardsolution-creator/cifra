@@ -42,12 +42,19 @@ export default async (req: Request) => {
   const locale = asLocale(body?.locale);
   const rpc = (fn: string, args: unknown) => fetch(`${url}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: service, authorization: `Bearer ${service}`, 'content-type': 'application/json' }, body: JSON.stringify(args) });
   const rpcJson = async <T,>(fn: string, args: unknown): Promise<{ ok: boolean; data: T | null; text: string }> => { const r = await rpc(fn, args).catch(() => null); const text = r ? await r.text().catch(() => '') : ''; return { ok: !!r && r.ok, data: r && r.ok && text ? (JSON.parse(text) as T) : null, text }; };
-  const send = async (to: string, purpose: 'verify' | 'reset', code: string) => {
-    if (!brevo || !from) return false;
+  /** Sends one mail through Brevo. On failure `hint` says why (never a secret): the sender or key is not set up, or Brevo's own reason. */
+  const send = async (to: string, purpose: 'verify' | 'reset', code: string): Promise<{ ok: boolean; hint?: string }> => {
+    if (!brevo) return { ok: false, hint: 'BREVO_API_KEY missing in Netlify (Functions scope)' };
+    if (!from) return { ok: false, hint: 'MAIL_FROM_EMAIL missing in Netlify (Functions scope)' };
     const [subject, text] = MAIL[locale][purpose](code);
     const r = await fetch('https://api.brevo.com/v3/smtp/email', { method: 'POST', headers: { 'api-key': brevo, 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({ sender: { name: env('MAIL_FROM_NAME') || 'CIFRA', email: from }, to: [{ email: to }], subject, textContent: text, htmlContent: `<div style="font-family:Arial,sans-serif;font-size:16px;color:#111"><p>${text.replace(code, `<b style="font-size:24px;letter-spacing:4px">${code}</b>`)}</p><p style="color:#888;font-size:12px">CIFRA</p></div>` }) }).catch(() => null);
-    return !!r && r.ok;
+    if (!r) return { ok: false, hint: 'Brevo unreachable' };
+    if (r.ok) return { ok: true };
+    const info = (await r.json().catch(() => ({}))) as { code?: string; message?: string };
+    const hint = `Brevo ${r.status}: ${[info.code, info.message].filter(Boolean).join(' · ')}`.slice(0, 200);
+    console.error('recovery mail failed', hint);
+    return { ok: false, hint };
   };
   const failed = (text: string) => (/rate_limited/.test(text) ? json({ error: 'rate_limited' }, 429) : json({ error: 'failed' }, 400));
 
@@ -62,7 +69,7 @@ export default async (req: Request) => {
       if (row?.has_email && row.email) {
         const otp = newOtp();
         const begin = await rpcJson('recovery_begin_email', { p_user: row.user_id, p_email: row.email, p_otp_hash: hashSecret(pepper, row.user_id, 'reset', otp), p_purpose: 'reset', p_ttl_minutes: 10 });
-        if (begin.ok) await send(row.email, 'reset', otp);
+        if (begin.ok) await send(row.email, 'reset', otp); // the answer stays generic; a failure is in the function log
       }
       return json({ ok: true });
     }
@@ -93,7 +100,8 @@ export default async (req: Request) => {
     const otp = newOtp();
     const begin = await rpcJson('recovery_begin_email', { p_user: userId, p_email: email, p_otp_hash: hashSecret(pepper, userId, 'verify', otp), p_purpose: 'verify', p_ttl_minutes: 10 });
     if (!begin.ok) return failed(begin.text);
-    if (!(await send(email, 'verify', otp))) return json({ error: 'mail_failed' }, 502);
+    const mail = await send(email, 'verify', otp);
+    if (!mail.ok) return json({ error: 'mail_failed', hint: mail.hint }, 502);
     return json({ ok: true });
   }
   if (action === 'email_confirm') {

@@ -18,6 +18,7 @@ const known: [RegExp, string][] = [
   [/Token has expired|otp_expired|invalid.*token|invalid_or_expired/i, 'El código no es válido o ha caducado.'],
   [/invalid_email/, 'Escribe un correo válido.'],
   [/mail_failed|not_configured/, 'No pudimos enviar el correo ahora. Inténtalo en unos minutos.'],
+  [/business_has_team/, 'Eres propietario de un negocio con equipo. Quita al equipo o traspasa el negocio antes de eliminar tu cuenta.'],
   [/update_failed/, 'No pudimos cambiar la contraseña. Inténtalo de nuevo.'],
   [/Failed to fetch|Network request failed|NetworkError|Load failed/i, 'Sin conexión. Revisa tu internet e inténtalo de nuevo.'],
   [/row-level security|permission denied/i, 'No tienes permiso para hacer eso.'],

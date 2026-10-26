@@ -1,3 +1,4 @@
+import { TopScrim } from '../components/TopScrim';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
 import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
@@ -22,6 +23,7 @@ function Shell() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade' }} />
+      <TopScrim />
     </View>
   );
 }

@@ -87,6 +87,8 @@ await db.exec(migration('20261031_000013_appointment_reminders.sql'));
 await db.exec(migration('20261031_000013_appointment_reminders.sql'));
 await db.exec(migration('20261101_000014_account_recovery.sql'));
 await db.exec(migration('20261101_000014_account_recovery.sql'));
+await db.exec(migration('20261102_000015_delete_account.sql'));
+await db.exec(migration('20261102_000015_delete_account.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -852,6 +854,32 @@ await check('Recuperacion de cuenta: correo con codigo, codigo de recuperacion d
   await as('ben', async () => denied(db.query(`select * from public.recovery_lookup('+34600000001')`), 'lookup as user'));
   await as('ben', async () => denied(db.query(`select public.recovery_check_code($1, 'x')`, [u]), 'check as user'));
   await as('ana', async () => eq((await q(`select email_masked from public.my_recovery_status()`))[0].email_masked, null)); // sees only their own
+});
+
+await check('Borrar mi cuenta: se va todo lo mio, lo compartido se queda y un negocio con equipo lo impide', async () => {
+  const mk = async (phone, name) => (await q(`insert into auth.users (phone, raw_user_meta_data, phone_confirmed_at) values ($1, $2, now()) returning id`, [phone, JSON.stringify({ display_name: name })]))[0].id;
+  const zed = await mk('34600000091', 'Zed'); ids.zed = zed;
+  const yan = await mk('34600000092', 'Yan'); ids.yan = yan;
+  // a group made by zed with ana, plus a solo group, a business owned alone, and messages
+  const g = await as('zed', async () => (await q(`select public.create_group('Plan', $1) as id`, [[ids.ana]]))[0].id);
+  await as('zed', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'mio')`, [g]));
+  await as('ana', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'de ana')`, [g]));
+  const solo = await as('zed', async () => (await q(`select public.create_group('Solo', $1) as id`, [[]]))[0].id);
+  const zb = await as('zed', async () => (await q(`select public.create_business('Zed Shop', 'zed-shop', null, null, null) as id`))[0].id);
+  // yan owns a business with a team member: cannot leave
+  const yb = await as('yan', async () => (await q(`select public.create_business('Yan Co', 'yan-co', null, null, null) as id`))[0].id);
+  await q(`insert into public.business_members (business_id, user_id, role) values ($1, $2, 'agent')`, [yb, ids.ana]);
+  await as('yan', async () => denied(db.query(`select public.delete_my_account()`), 'business with team'));
+  eq((await q(`select count(*)::int as n from auth.users where id = $1`, [yan]))[0].n, 1);
+  // zed leaves
+  await as('zed', () => db.query(`select public.delete_my_account()`));
+  eq((await q(`select count(*)::int as n from auth.users where id = $1`, [zed]))[0].n, 0);
+  eq((await q(`select count(*)::int as n from public.profiles where id = $1`, [zed]))[0].n, 0);
+  eq((await q(`select count(*)::int as n from public.businesses where id = $1`, [zb]))[0].n, 0);
+  eq((await q(`select count(*)::int as n from public.conversations where id = $1`, [solo]))[0].n, 0);
+  eq((await q(`select created_by from public.conversations where id = $1`, [g]))[0].created_by, ids.ana); // ana inherits the group
+  eq((await q(`select body from public.messages where conversation_id = $1 order by created_at`, [g])).map((r) => r.body), ['de ana']); // zed's messages are gone, ana's stay
+  await as('ana', async () => eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1`, [g]))[0].n, 1));
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);

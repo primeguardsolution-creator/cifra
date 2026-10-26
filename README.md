@@ -124,3 +124,6 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 ### Icono de la app y cabecera de la web
 - Icono nuevo (dos burbujas) en 5 épocas: Moderno, Clásico B/N, Retro 70, Neón 80 y Y2K (`public/icons/<variante>/`, generadas por `scripts/make-icons.mjs`). Ajustes → Icono de la app: cambia el icono de la pestaña al instante; el de la pantalla de inicio se fija al añadir la app (enlace `/?icon=<variante>`).
 - Expo (`output: "single"`) ignora `app/+html.tsx`, así que la cabecera real (viewport-fit, meta de iOS, manifest, iconos, Open Graph, colores base) vive en `scripts/head.html` y `scripts/inject-head.mjs` la inserta en `dist/index.html` al compilar (`scripts/build-web.sh`).
+
+### Migración 15 · eliminar mi cuenta
+`20261102_000015_delete_account.sql`: `delete_my_account()` borra a la persona (perfil, mensajes, estados, contactos, dispositivos de aviso) y los negocios que tiene ella sola; los chats compartidos se quedan para los demás (la creación pasa a otro miembro). Si es propietaria de un negocio con equipo, lo impide hasta que lo traspase o quite al equipo. En la app: Ajustes → Eliminar mi cuenta (pide contraseña y escribir ELIMINAR; antes borra sus archivos del almacenamiento).

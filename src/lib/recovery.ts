@@ -15,8 +15,8 @@ async function call<T>(action: string, body: Record<string, unknown> = {}, signe
   }
   const base = Platform.OS === 'web' ? '' : (process.env.EXPO_PUBLIC_APP_URL ?? 'https://cifra-mensajeria.netlify.app');
   const res = await fetch(`${base}/api/recovery`, { method: 'POST', headers, body: JSON.stringify({ action, locale: getLocale(), ...body }) });
-  const json = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(json.error ?? 'failed');
+  const json = (await res.json().catch(() => ({}))) as T & { error?: string; hint?: string };
+  if (!res.ok) throw Object.assign(new Error(json.error ?? 'failed'), { hint: json.hint });
   return json;
 }
 

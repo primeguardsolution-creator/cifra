@@ -33,7 +33,7 @@ export function SafetySheet({ visible, onClose, onChanged }: { visible: boolean;
   const copy = async () => { if (code) { await Clipboard.setStringAsync(code); toast.show('Código copiado', 'success'); } };
   const sendEmail = async () => {
     setBusy('email');
-    try { await startEmail(email); setSent(true); toast.show('Te enviamos un código de 6 dígitos', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(null); }
+    try { await startEmail(email); setSent(true); toast.show('Te enviamos un código de 6 dígitos', 'success'); } catch (e) { const hint = (e as { hint?: string }).hint; toast.show(friendly(e) + (hint ? ` (${hint})` : ''), 'error'); } finally { setBusy(null); }
   };
   const verify = async () => {
     setBusy('otp');
