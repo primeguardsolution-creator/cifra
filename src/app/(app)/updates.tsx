@@ -1,3 +1,4 @@
+import { pingAttention } from '../../state/AttentionProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,7 +33,7 @@ export default function Updates() {
   const seenKey = `cifra.statusSeen.${user?.id ?? ''}`;
   const [seen, setSeen] = useState<Record<string, string>>({});
   useEffect(() => { AsyncStorage.getItem(seenKey).then((v) => v && setSeen(JSON.parse(v))).catch(() => {}); }, [seenKey]);
-  const markSeen = useCallback((id: string, latest: string) => { setSeen((cur) => { if (cur[id] && cur[id] >= latest) return cur; const next = { ...cur, [id]: latest }; AsyncStorage.setItem(seenKey, JSON.stringify(next)).catch(() => {}); return next; }); }, [seenKey]);
+  const markSeen = useCallback((id: string, latest: string) => { setSeen((cur) => { if (cur[id] && cur[id] >= latest) return cur; const next = { ...cur, [id]: latest }; AsyncStorage.setItem(seenKey, JSON.stringify(next)).then(pingAttention).catch(() => {}); return next; }); }, [seenKey]);
   const unseen = (id: string, list: StatusRow[]) => list.length > 0 && !(seen[id] && seen[id] >= list[list.length - 1].created_at);
 
   // Businesses you talk to (the ones whose posts show up here), from your own chat list.

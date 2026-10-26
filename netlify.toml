@@ -27,6 +27,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/recovery"
+  to = "/.netlify/functions/recovery"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/link-preview"
   to = "/.netlify/functions/link-preview"
   status = 200

@@ -1,3 +1,4 @@
+import { pingAttention } from '../../state/AttentionProvider';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -30,7 +31,7 @@ export function InvitationRow({ a, onDone, compact }: { a: MyAppointment; onDone
   const [busy, setBusy] = useState(false);
   const respond = async (s: 'confirmed' | 'cancelled') => {
     setBusy(true);
-    try { await respondAppointment(a.id, s); toast.show(s === 'confirmed' ? 'Invitación aceptada · la cita está en tu agenda' : 'Invitación rechazada', 'success'); onDone(); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); }
+    try { await respondAppointment(a.id, s); toast.show(s === 'confirmed' ? 'Invitación aceptada · la cita está en tu agenda' : 'Invitación rechazada', 'success'); pingAttention(); onDone(); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); }
   };
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.surface, padding: compact ? 8 : 12, borderRadius: r(14), borderWidth: 1, borderColor: c.border }}>

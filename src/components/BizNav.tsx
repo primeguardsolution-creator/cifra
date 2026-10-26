@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../state/AuthProvider';
+import { useAttention } from '../state/AttentionProvider';
 import { useChats } from '../state/ChatsProvider';
 import { useSpace } from '../state/SpaceProvider';
 import { useTheme } from '../theme/ThemeProvider';
@@ -12,10 +13,10 @@ import { Avatar, Badge, Icon, IconName, Logo, Pressy, Txt } from '../ui';
 // Business navigation is deliberately a different species from Personal: flat bar with a signal stripe, a raised "Doer" key,
 // and (on wide screens) a workspace sidebar with labelled sections, like a team tool. Icons move too: the stripe slides in,
 // the active icon bounces, the Doer key breathes and sidebar icons pop when they light up.
-type BizItem = { href: string; label: string; icon: IconName; iconOn: IconName; badge?: 'inbox' };
+type BizItem = { href: string; label: string; icon: IconName; iconOn: IconName; badge?: 'inbox' | 'agenda' };
 const items: BizItem[] = [
   { href: '/inbox', label: 'Bandeja', icon: 'file-tray-full-outline', iconOn: 'file-tray-full', badge: 'inbox' },
-  { href: '/agenda', label: 'Agenda', icon: 'calendar-outline', iconOn: 'calendar' },
+  { href: '/agenda', label: 'Agenda', icon: 'calendar-outline', iconOn: 'calendar', badge: 'agenda' },
   { href: '/doer', label: 'Doer', icon: 'flash-outline', iconOn: 'flash' },
   { href: '/clients', label: 'Clientes', icon: 'people-outline', iconOn: 'people' },
   { href: '/more', label: 'Más', icon: 'grid-outline', iconOn: 'grid' },
@@ -25,6 +26,7 @@ const isActive = (href: string, path: string) => (href === '/more' ? moreRoutes.
 const native = Platform.OS !== 'web';
 
 function useInbox() { return useChats().unread.business; }
+function useAgendaBubble() { return useAttention().requests; }
 
 /** Spring that lands on 1 when `on`, 0 otherwise, plus a one-shot bounce each time it turns on. */
 function useLight(on: boolean) {
@@ -42,13 +44,15 @@ function useLight(on: boolean) {
 
 function BizTab({ it, on, unread }: { it: BizItem; on: boolean; unread: number }) {
   const { c } = useTheme();
+  const requests = useAgendaBubble();
+  const count = it.badge === 'agenda' ? requests : unread;
   const { light, bounce } = useLight(on);
   return (
     <Pressy onPress={() => router.replace(it.href as never)} haptic accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={it.label} scale={0.92} style={{ flex: 1, alignItems: 'center', gap: 3, paddingTop: 11, paddingBottom: 6 }}>
       <Animated.View style={{ position: 'absolute', top: 0, left: 14, right: 14, height: 3, backgroundColor: c.highlight, opacity: light, transform: [{ scaleX: light.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }) }] }} />
       <Animated.View style={{ transform: [{ scale: bounce.interpolate({ inputRange: [0, 1], outputRange: [1, 1.28] }) }, { translateY: bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }, { rotate: bounce.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-8deg'] }) }] }}>
         <Icon name={on ? it.iconOn : it.icon} size={23} color={on ? c.text : c.textMuted} />
-        {it.badge && unread > 0 && <View style={{ position: 'absolute', top: -6, right: -12 }}><Badge count={unread} /></View>}
+        {it.badge && count > 0 && <View style={{ position: 'absolute', top: -6, right: -12 }}><Badge count={count} /></View>}
       </Animated.View>
       <Txt style={{ fontSize: 10, lineHeight: 12, fontFamily: font.mono, letterSpacing: 0.5, color: on ? c.text : c.textMuted, textTransform: 'uppercase' }}>{it.label}</Txt>
     </Pressy>
@@ -121,6 +125,7 @@ export function BizSidebar() {
   const insets = useSafeAreaInsets();
   const path = usePathname();
   const unread = useInbox();
+  const requests = useAgendaBubble();
   const { active, switchSpace } = useSpace();
   const { profile, user } = useAuth();
   const label = (t: string) => <Txt v="mono" style={{ color: '#8F8666', marginTop: 18, marginBottom: 6, marginLeft: 12 }}>{t}</Txt>;
@@ -143,7 +148,7 @@ export function BizSidebar() {
       {label('TRABAJO')}
       <View style={{ gap: 2 }}>
         <SideRow icon="file-tray-full" label="Bandeja" href="/inbox" count={unread} on={isActive('/inbox', path)} />
-        <SideRow icon="calendar" label="Agenda" href="/agenda" on={path === '/agenda'} />
+        <SideRow icon="calendar" label="Agenda" href="/agenda" count={requests} on={path === '/agenda'} />
         <SideRow icon="people" label="Clientes" href="/clients" on={path === '/clients'} />
         <SideRow icon="flash" label="Doer" href="/doer" on={path === '/doer'} />
       </View>

@@ -85,6 +85,8 @@ await db.exec(migration('20261030_000012_push_prefs.sql'));
 await db.exec(migration('20261030_000012_push_prefs.sql'));
 await db.exec(migration('20261031_000013_appointment_reminders.sql'));
 await db.exec(migration('20261031_000013_appointment_reminders.sql'));
+await db.exec(migration('20261101_000014_account_recovery.sql'));
+await db.exec(migration('20261101_000014_account_recovery.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -808,6 +810,48 @@ await check('Recordatorio 5 min antes: creador, asignado e invitado; una sola ve
   eq((await q(`select * from public.reminder_payloads($1)`, [aid])).length, 0);
   await as('ben', async () => denied(db.query(`select * from public.reminder_payloads($1)`, [aid]), 'reminder_payloads as user'));
   await as('ben', async () => denied(db.query(`select public.dispatch_appointment_reminders()`), 'dispatch as user'));
+});
+
+await check('Recuperacion de cuenta: correo con codigo, codigo de recuperacion de un solo uso, limites y privacidad', async () => {
+  const u = ids.ben;
+  // nothing set yet
+  eq((await q(`select user_id, has_email, has_code from public.recovery_lookup('+34600000002')`))[0], { user_id: u, has_email: false, has_code: false });
+  eq((await q(`select count(*)::int as n from public.recovery_lookup('+34999999999')`))[0].n, 0);
+  // verify an e-mail with a 6-digit code (stored hashed): wrong code fails, right one verifies
+  await q(`select public.recovery_begin_email($1, 'Ben@Example.com', 'h-123456', 'verify')`, [u]);
+  eq((await q(`select public.recovery_check_otp($1, 'h-000000', 'verify') as ok`, [u]))[0].ok, false);
+  eq((await q(`select public.recovery_check_otp($1, 'h-123456', 'reset') as ok`, [u]))[0].ok, false); // a verify code does not reset passwords
+  eq((await q(`select public.recovery_check_otp($1, 'h-123456', 'verify') as ok`, [u]))[0].ok, true);
+  eq((await q(`select public.recovery_check_otp($1, 'h-123456', 'verify') as ok`, [u]))[0].ok, false); // one use
+  eq((await q(`select has_email, email from public.recovery_lookup('+34600000002')`))[0], { has_email: true, email: 'ben@example.com' });
+  eq((await as('ben', () => q(`select email_masked, email_verified, has_code from public.my_recovery_status()`)))[0], { email_masked: 'be***@example.com', email_verified: true, has_code: false });
+  // sends: 60 s apart, 5 per hour
+  await q(`update public.account_recovery set last_sent_at = now() - interval '2 minutes' where user_id = $1`, [u]);
+  await q(`select public.recovery_begin_email($1, null, 'h-111111', 'reset')`, [u]);
+  let limited = false; try { await q(`select public.recovery_begin_email($1, null, 'h-222222', 'reset')`, [u]); } catch { limited = true; }
+  eq(limited, true);
+  await q(`update public.account_recovery set last_sent_at = now() - interval '2 minutes' where user_id = $1`, [u]);
+  // 5 wrong tries burn the reset code even if the right one comes later
+  for (let i = 0; i < 5; i++) await q(`select public.recovery_check_otp($1, 'h-bad', 'reset')`, [u]);
+  eq((await q(`select public.recovery_check_otp($1, 'h-111111', 'reset') as ok`, [u]))[0].ok, false);
+  // expired codes fail
+  await q(`update public.account_recovery set last_sent_at = now() - interval '2 minutes' where user_id = $1`, [u]);
+  await q(`select public.recovery_begin_email($1, null, 'h-333333', 'reset')`, [u]);
+  await q(`update public.account_recovery set otp_expires_at = now() - interval '1 second' where user_id = $1`, [u]);
+  eq((await q(`select public.recovery_check_otp($1, 'h-333333', 'reset') as ok`, [u]))[0].ok, false);
+  // recovery code: consumed on use, locked after 5 failures
+  await q(`select public.recovery_set_code($1, 'c-hash')`, [u]);
+  eq((await as('ben', () => q(`select has_code from public.my_recovery_status()`)))[0].has_code, true);
+  for (let i = 0; i < 5; i++) eq((await q(`select public.recovery_check_code($1, 'c-wrong') as ok`, [u]))[0].ok, false);
+  eq((await q(`select public.recovery_check_code($1, 'c-hash') as ok`, [u]))[0].ok, false); // locked for 15 minutes
+  await q(`update public.account_recovery set locked_until = null where user_id = $1`, [u]);
+  eq((await q(`select public.recovery_check_code($1, 'c-hash') as ok`, [u]))[0].ok, true);
+  eq((await q(`select public.recovery_check_code($1, 'c-hash') as ok`, [u]))[0].ok, false); // single use
+  // privacy: nobody reads the table or calls the server functions
+  await as('ben', async () => denied(db.query(`select * from public.account_recovery`), 'table is private'));
+  await as('ben', async () => denied(db.query(`select * from public.recovery_lookup('+34600000001')`), 'lookup as user'));
+  await as('ben', async () => denied(db.query(`select public.recovery_check_code($1, 'x')`, [u]), 'check as user'));
+  await as('ana', async () => eq((await q(`select email_masked from public.my_recovery_status()`))[0].email_masked, null)); // sees only their own
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
