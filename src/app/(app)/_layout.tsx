@@ -9,6 +9,7 @@ import { assistantStore } from '../../features/assistant/store';
 import { useAuth } from '../../state/AuthProvider';
 import { CallProvider } from '../../features/calls/CallProvider';
 import { LockProvider } from '../../features/lock/LockProvider';
+import { AttentionProvider } from '../../state/AttentionProvider';
 import { ChatsProvider } from '../../state/ChatsProvider';
 import { SpaceProvider } from '../../state/SpaceProvider';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -25,9 +26,11 @@ export default function AppLayout() {
     <LockProvider>
       <SpaceProvider>
         <ChatsProvider>
-          <CallProvider>
-            <Frame />
-          </CallProvider>
+          <AttentionProvider>
+            <CallProvider>
+              <Frame />
+            </CallProvider>
+          </AttentionProvider>
         </ChatsProvider>
       </SpaceProvider>
     </LockProvider>

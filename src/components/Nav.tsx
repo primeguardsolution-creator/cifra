@@ -3,6 +3,7 @@ import { router, usePathname } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAttention } from '../state/AttentionProvider';
 import { useChats } from '../state/ChatsProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { Space } from '../theme/tokens';
@@ -10,18 +11,18 @@ import { Badge, Icon, IconName, Logo, Pressy, Txt } from '../ui';
 import { BizSidebar, BizTabBar } from './BizNav';
 import { SpaceSwitchRail } from './SpaceSwitch';
 
-type Item = { href: string; label: string; icon: IconName; iconOn: IconName; badge?: 'chats' | 'inbox' | 'calls' };
+type Item = { href: string; label: string; icon: IconName; iconOn: IconName; badge?: 'chats' | 'inbox' | 'calls' | 'statuses' | 'agenda' | 'invites' };
 export const navItems: Record<Space, Item[]> = {
   personal: [
     { href: '/chats', label: 'Chats', icon: 'chatbubbles-outline', iconOn: 'chatbubbles', badge: 'chats' },
-    { href: '/updates', label: 'Estados', icon: 'aperture-outline', iconOn: 'aperture' },
+    { href: '/updates', label: 'Estados', icon: 'aperture-outline', iconOn: 'aperture', badge: 'statuses' },
     { href: '/calls', label: 'Llamadas', icon: 'call-outline', iconOn: 'call', badge: 'calls' },
     { href: '/contacts', label: 'Contactos', icon: 'people-outline', iconOn: 'people' },
-    { href: '/settings', label: 'Ajustes', icon: 'settings-outline', iconOn: 'settings' },
+    { href: '/settings', label: 'Ajustes', icon: 'settings-outline', iconOn: 'settings', badge: 'invites' },
   ],
   business: [
     { href: '/inbox', label: 'Bandeja', icon: 'file-tray-full-outline', iconOn: 'file-tray-full', badge: 'inbox' },
-    { href: '/agenda', label: 'Agenda', icon: 'calendar-outline', iconOn: 'calendar' },
+    { href: '/agenda', label: 'Agenda', icon: 'calendar-outline', iconOn: 'calendar', badge: 'agenda' },
     { href: '/doer', label: 'Doer', icon: 'flash-outline', iconOn: 'flash' },
     { href: '/clients', label: 'Clientes', icon: 'people-outline', iconOn: 'people' },
     { href: '/more', label: 'Más', icon: 'grid-outline', iconOn: 'grid' },
@@ -31,9 +32,20 @@ export const topLevel = ['/chats', '/updates', '/calls', '/contacts', '/settings
 /** Screens that live under the Business "Más" tab. */
 export const moreRoutes = ['/more', '/catalog', '/business', '/settings', '/posts'];
 
-function useBadge(kind?: 'chats' | 'inbox' | 'calls') {
+export type BadgeKind = 'chats' | 'inbox' | 'calls' | 'statuses' | 'agenda' | 'invites';
+/** Count shown in the bubble of a nav item: unread chats, missed calls, new statuses, appointment invitations / requests. */
+export function useBadge(kind?: BadgeKind) {
   const { unread, missedCalls } = useChats();
-  return kind === 'chats' ? unread.personal : kind === 'inbox' ? unread.business : kind === 'calls' ? missedCalls : 0;
+  const { statuses, invites, requests } = useAttention();
+  switch (kind) {
+    case 'chats': return unread.personal;
+    case 'inbox': return unread.business;
+    case 'calls': return missedCalls;
+    case 'statuses': return statuses;
+    case 'invites': return invites;
+    case 'agenda': return requests;
+    default: return 0;
+  }
 }
 
 function TabItem({ item, active }: { item: Item; active: boolean }) {
