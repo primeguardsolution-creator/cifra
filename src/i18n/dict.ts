@@ -1290,4 +1290,13 @@ export const rows: [string, string, string][] = [
   ["Neón 80", "Neon 80s", "Neon 80er"],
   ["Rosa y cian eléctricos · años 80", "Electric pink and cyan · 1980s", "Elektrisches Pink und Cyan · 1980er"],
   ["Azul brillante y lima · año 2000", "Bright blue and lime · year 2000", "Leuchtendes Blau und Limette · Jahr 2000"],
+  ["Eliminar mi cuenta", "Delete my account", "Mein Konto löschen"],
+  ["Borra tu perfil, mensajes y archivos para siempre", "Deletes your profile, messages and files for good", "Löscht dein Profil, deine Nachrichten und Dateien endgültig"],
+  ["ELIMINAR", "DELETE", "LÖSCHEN"],
+  ["Escribe {word} para confirmar", "Type {word} to confirm", "Tippe {word} zur Bestätigung"],
+  ["Tu cuenta se ha eliminado", "Your account has been deleted", "Dein Konto wurde gelöscht"],
+  ["Eres propietario de un negocio con equipo. Quita al equipo o traspasa el negocio antes de eliminar tu cuenta.", "You own a business with a team. Remove the team or hand the business over before deleting your account.", "Du besitzt ein Unternehmen mit Team. Entferne das Team oder übergib das Unternehmen, bevor du dein Konto löschst."],
+  ["Esto no se puede deshacer. Se borran tu perfil, tus mensajes, tus estados, tus contactos y tus archivos, y los negocios que tengas tú solo. Las conversaciones con otras personas siguen para ellas, sin tus mensajes.", "This cannot be undone. Your profile, messages, statuses, contacts and files are deleted, along with businesses that only you run. Conversations with other people stay for them, without your messages.", "Das kann nicht rückgängig gemacht werden. Dein Profil, deine Nachrichten, Status, Kontakte und Dateien sowie Unternehmen, die nur du führst, werden gelöscht. Unterhaltungen mit anderen bleiben für sie bestehen, ohne deine Nachrichten."],
+  ["Tu contraseña", "Your password", "Dein Passwort"],
+  ["Eliminar mi cuenta para siempre", "Delete my account forever", "Mein Konto endgültig löschen"],
 ];

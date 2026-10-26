@@ -16,6 +16,7 @@ import { ModePreference, useTheme } from '../../theme/ThemeProvider';
 import { Avatar, Card, Divider, Icon, IconName, Pressy, SectionLabel, Sheet, SheetRow, Toggle, Txt, useToast } from '../../ui';
 import { updateMyProfile } from '../../lib/api';
 import { friendly } from '../../lib/errors';
+import { DeleteAccountSheet } from '../../features/settings/DeleteAccountSheet';
 import { AppIconSheet } from '../../features/settings/AppIconSheet';
 import { SafetySheet, safetySummary } from '../../features/auth/AccountSafety';
 import { RecoveryStatus, recoveryStatus } from '../../lib/recovery';
@@ -53,6 +54,7 @@ export default function Settings() {
   const [pushBusy, setPushBusy] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [iconOpen, setIconOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [safety, setSafety] = useState<RecoveryStatus | null>(null);
   const [prefs, setPrefs] = useState<PushPrefs>({ personal: true, business: true });
   const [langSheet, setLangSheet] = useState(false);
@@ -200,7 +202,7 @@ export default function Settings() {
           </Card>
 
           <View style={{ marginTop: 22 }}>
-            <Card><Row icon="log-out" title="Cerrar sesión" tone="danger" onPress={async () => { await signOut(); router.replace('/'); }} /></Card>
+            <Card><Row icon="log-out" title="Cerrar sesión" tone="danger" onPress={async () => { await signOut(); router.replace('/'); }} /><Divider inset={66} /><Row icon="trash" title="Eliminar mi cuenta" sub="Borra tu perfil, mensajes y archivos para siempre" tone="danger" onPress={() => setDeleteOpen(true)} /></Card>
           </View>
         </View>
       </ScrollView>
@@ -213,6 +215,7 @@ export default function Settings() {
         </View>
       </Sheet>
 
+      <DeleteAccountSheet visible={deleteOpen} onClose={() => setDeleteOpen(false)} />
       <AppIconSheet visible={iconOpen} onClose={() => setIconOpen(false)} />
       <SafetySheet visible={safetyOpen} onClose={() => setSafetyOpen(false)} onChanged={setSafety} />
       <Sheet visible={langSheet} onClose={() => setLangSheet(false)} title="Elige el idioma de CIFRA">
