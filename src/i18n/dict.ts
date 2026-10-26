@@ -1347,4 +1347,12 @@ export const rows: [string, string, string][] = [
   ["Nada por revisar", "Nothing to review", "Nichts zu prüfen"],
   ["Cuando alguien reporte un contacto o un negocio, aparecerá aquí.", "When someone reports a contact or a business, it will show up here.", "Wenn jemand einen Kontakt oder ein Unternehmen meldet, erscheint es hier."],
   ["Reportes de contactos y negocios", "Reports of contacts and businesses", "Meldungen von Kontakten und Unternehmen"],
+  ["Mensajes temporales", "Disappearing messages", "Selbstlöschende Nachrichten"],
+  ["Los mensajes nuevos de este chat se borran solos pasado este tiempo, para todos. Los anteriores no cambian.", "New messages in this chat delete themselves after this time, for everyone. Earlier ones do not change.", "Neue Nachrichten in diesem Chat löschen sich nach dieser Zeit selbst, für alle. Frühere bleiben unverändert."],
+  ["Desactivados", "Off", "Aus"],
+  ["24 horas", "24 hours", "24 Stunden"],
+  ["7 días", "7 days", "7 Tage"],
+  ["90 días", "90 days", "90 Tage"],
+  ["Mensajes temporales activados", "Disappearing messages on", "Selbstlöschende Nachrichten an"],
+  ["Mensajes temporales desactivados", "Disappearing messages off", "Selbstlöschende Nachrichten aus"],
 ];

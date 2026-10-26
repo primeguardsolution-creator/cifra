@@ -15,6 +15,7 @@ import { VideoModal } from '../../../features/chat/VideoPlayer';
 import { ConversationState, Message, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
 import { broadcastOptOut } from '../../../lib/biz';
+import { disappearingFor, setDisappearing } from '../../../lib/api';
 import { dayLabel } from '../../../lib/format';
 import { WIDE } from '../../../lib/layout';
 import { formatPhone } from '../../../lib/phone';
@@ -60,7 +61,14 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   const { patch, refresh } = useChats();
   const { active } = useSpace();
   const call = useCall();
-  const { chat, messages } = conv;
+  const { chat } = conv;
+  // disappearing messages: hide what has expired (the server deletes it a little later)
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const tick = setInterval(() => setNow(Date.now()), 20_000); return () => clearInterval(tick); }, []);
+  const messages = useMemo(() => conv.messages.filter((x) => !x.expires_at || new Date(x.expires_at).getTime() > now), [conv.messages, now]);
+  const [timer, setTimer] = useState<number | null>(null);
+  const [timerOpen, setTimerOpen] = useState(false);
+  useEffect(() => { if (id) disappearingFor(id).then(setTimer).catch(() => {}); }, [id, timerOpen]);
   const agent = chat?.perspective === 'agent';
 
   const [actionFor, setActionFor] = useState<Message | null>(null);
@@ -297,6 +305,13 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
         <SheetRow icon="close-circle" label="Quitar asignación" onPress={() => assign(null)} />
       </Sheet>
 
+      <Sheet visible={timerOpen} onClose={() => setTimerOpen(false)} title="Mensajes temporales">
+        <Txt v="small" tone="muted" style={{ marginBottom: 6 }}>Los mensajes nuevos de este chat se borran solos pasado este tiempo, para todos. Los anteriores no cambian.</Txt>
+        {([[0, 'Desactivados'], [86400, '24 horas'], [604800, '7 días'], [7776000, '90 días']] as [number, string][]).map(([secs, label]) => (
+          <SheetRow key={secs} icon={(timer ?? 0) === secs ? 'radio-button-on' : 'radio-button-off'} label={label} onPress={async () => { setTimerOpen(false); try { await setDisappearing(id, secs); setTimer(secs || null); toast.show(secs ? 'Mensajes temporales activados' : 'Mensajes temporales desactivados', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />
+        ))}
+      </Sheet>
+
       <Sheet visible={menu} onClose={() => setMenu(false)} title={chat ? chatTitle(chat) : undefined}>
         {chat && (
           <View style={{ alignItems: 'center', gap: 6, paddingVertical: 10 }}>
@@ -306,6 +321,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
             {incognito && <Txt v="caption" tone="muted" style={{ textAlign: 'center', maxWidth: 320, fontFamily: font.typewriter }}>Blanco y negro, máquina de escribir: así sabes que esto se autodestruye.</Txt>}
           </View>
         )}
+        {(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito && <SheetRow icon="hourglass" label="Mensajes temporales" sub={timer ? ({ 86400: '24 horas', 604800: '7 días', 7776000: '90 días' } as Record<number, string>)[timer] : 'Desactivados'} onPress={() => { setMenu(false); setTimerOpen(true); }} />}
         {!incognito && <SheetRow icon="search" label="Buscar en mensajes" onPress={() => { setMenu(false); router.push('/search'); }} />}
         {chat?.kind === 'business' && !agent && chat.business_id && <SheetRow icon="storefront" label="Ver perfil y catálogo" onPress={() => { setMenu(false); router.push({ pathname: '/b/[id]', params: { id: chat.business_id! } }); }} />}
         {directPeer && !incognito && !blocked && (

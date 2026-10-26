@@ -93,6 +93,8 @@ await db.exec(migration('20261103_000016_broadcasts.sql'));
 await db.exec(migration('20261103_000016_broadcasts.sql'));
 await db.exec(migration('20261104_000017_moderation.sql'));
 await db.exec(migration('20261104_000017_moderation.sql'));
+await db.exec(migration('20261105_000018_disappearing_messages.sql'));
+await db.exec(migration('20261105_000018_disappearing_messages.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -947,6 +949,32 @@ await check('Moderacion: solo administradores de la plataforma ven reportes, los
   eq((await q(`select banned_until is null as b from auth.users where id = $1`, [bad]))[0].b, true);
   eq((await q(`select count(*)::int as n from public.moderation_log`))[0].n >= 3, true);
   await as('adm', async () => denied(db.query(`select * from public.moderation_log`), 'log is private'));
+});
+
+await check('Mensajes temporales: temporizador por chat, los caducados se ocultan al instante y se borran; ni negocios ni ajenos', async () => {
+  const g = await as('ana', async () => (await q(`select public.create_group('Efimero', $1) as id`, [[ids.ben]]))[0].id);
+  eq((await as('ana', () => q(`select public.get_disappearing($1) as s`, [g])))[0].s, null);
+  await as('cleo', async () => denied(db.query(`select public.set_disappearing($1, 86400)`, [g]), 'outsider sets timer'));
+  await as('ana', async () => denied(db.query(`select public.set_disappearing($1, 12345)`, [g]), 'invalid timer'));
+  await as('ana', () => db.query(`select public.set_disappearing($1, 86400)`, [g]));
+  eq((await as('ben', () => q(`select public.get_disappearing($1) as s`, [g])))[0].s, 86400); // any member sees it
+  await as('cleo', async () => eq((await q(`select public.get_disappearing($1) as s`, [g]))[0].s, null)); // an outsider learns nothing
+  // new messages carry an expiry, the notice line does not
+  await as('ana', () => db.query(`insert into public.messages (conversation_id, sender_id, body) values ($1, auth.uid(), 'se borra manana')`, [g]));
+  const rows = await q(`select body, expires_at is not null as exp, is_automated from public.messages where conversation_id = $1 order by created_at`, [g]);
+  eq(rows.map((r) => [r.is_automated, r.exp]), [[true, false], [false, true]]);
+  // once expired it vanishes for the members at once, then the job deletes it
+  await q(`update public.messages set expires_at = now() - interval '1 second' where conversation_id = $1 and body = 'se borra manana'`, [g]);
+  await as('ben', async () => eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and body = 'se borra manana'`, [g]))[0].n, 0));
+  eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and body = 'se borra manana'`, [g]))[0].n, 1); // still stored until the job runs
+  eq((await q(`select public.purge_expired_messages() as n`))[0].n >= 1, true);
+  eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1 and body = 'se borra manana'`, [g]))[0].n, 0);
+  await as('ben', async () => denied(db.query(`select public.purge_expired_messages()`), 'purge as user'));
+  // switching it off
+  await as('ben', () => db.query(`select public.set_disappearing($1, 0)`, [g]));
+  eq((await as('ana', () => q(`select public.get_disappearing($1) as s`, [g])))[0].s, null);
+  // not for business chats
+  await as('eva', async () => denied(db.query(`select public.set_disappearing($1, 86400)`, [ids._evaConv]), 'business chat'));
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
