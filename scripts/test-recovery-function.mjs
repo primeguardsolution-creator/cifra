@@ -25,7 +25,7 @@ globalThis.fetch = async (url, init = {}) => {
   const ok = (v) => new Response(JSON.stringify(v), { status: 200 });
   if (url === 'https://sb.test/auth/v1/user') return init.headers.authorization === 'Bearer good' ? ok({ id: U }) : new Response('{}', { status: 401 });
   if (url.startsWith(`https://sb.test/auth/v1/admin/users/`)) { passwordPuts.push({ id: url.split('/').pop(), ...body, auth: init.headers.authorization }); return ok({}); }
-  if (url === 'https://api.brevo.com/v3/smtp/email') { sent.push({ key: init.headers['api-key'], ...body }); return new Response('{}', { status: brevoStatus }); }
+  if (url === 'https://api.brevo.com/v3/smtp/email') { sent.push({ key: init.headers['api-key'], ...body }); return new Response(brevoStatus >= 400 ? '{"code":"unauthorized","message":"Sender not valid"}' : '{}', { status: brevoStatus }); }
   if (url.startsWith('https://sb.test/rest/v1/rpc/')) {
     const fn = url.split('/').pop(); const r = db.rec[body.p_user];
     if (fn === 'recovery_lookup') { const id = db.phones[body.p_phone]; const x = id && db.rec[id]; return ok(id ? [{ user_id: id, has_email: x.verified, email: x.verified ? x.email : null, has_code: !!x.code }] : []); }
@@ -54,7 +54,8 @@ check('la base nunca recibe el código en claro', db.rec[U].otp !== lastCode() &
 check('código incorrecto → 400', (await post({ action: 'email_confirm', code: '000000' }, 'good')).status === 400);
 check('código correcto verifica el correo', (await post({ action: 'email_confirm', code: lastCode() }, 'good')).status === 200 && db.rec[U].verified && db.rec[U].email === 'eva@example.com');
 brevoStatus = 500; r = await post({ action: 'email_start', email: 'otro@example.com' }, 'good'); brevoStatus = 201;
-check('si Brevo falla → 502 mail_failed', r.status === 502 && (await r.json()).error === 'mail_failed');
+{ const j = await r.json(); check('si Brevo falla → 502 mail_failed con la razón de Brevo', r.status === 502 && j.error === 'mail_failed' && /Brevo 500: unauthorized · Sender not valid/.test(j.hint), JSON.stringify(j)); }
+env.MAIL_FROM_EMAIL = ''; { const j = await (await post({ action: 'email_start', email: 'otro@example.com' }, 'good')).json(); check('sin remitente configurado dice qué variable falta', /MAIL_FROM_EMAIL missing/.test(j.hint), JSON.stringify(j)); } env.MAIL_FROM_EMAIL = 'no-reply@cifra.test';
 
 r = await post({ action: 'make_code' }, 'good'); const { code } = await r.json();
 check('make_code devuelve XXXX-XXXX-XXXX sin 0/O/1/I', /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(code), code);

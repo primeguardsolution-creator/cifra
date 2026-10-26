@@ -68,9 +68,11 @@ function loadImage(uri: string): Promise<Loaded> {
 }
 
 /** Web only: downscale (and optionally center-crop to a square) so uploads stay fast and light. */
-async function processWebImage(file: Picked, opts: { max: number; square?: boolean }): Promise<Picked> {
+async function processWebImage(file: Picked, opts: { max: number; square?: boolean; quality?: number; keepUnder?: number }): Promise<Picked> {
   if (Platform.OS !== 'web' || file.type === 'image/gif') return file;
   const img = await loadImage(file.uri);
+  // high definition: a photo that already fits is published untouched (no second compression)
+  if (opts.keepUnder && !opts.square && /^image\/(jpeg|png|webp)$/.test(file.type) && (file.size ?? Infinity) <= opts.keepUnder && Math.max(img.w, img.h) <= opts.max) return file;
   const side = Math.min(img.w, img.h);
   const sx = opts.square ? (img.w - side) / 2 : 0;
   const sy = opts.square ? (img.h - side) / 2 : 0;
@@ -83,7 +85,7 @@ async function processWebImage(file: Picked, opts: { max: number; square?: boole
   if (!ctx) return file;
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   img.draw(ctx, 0, 0, canvas.width, canvas.height, sx, sy, sw, sh);
-  const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.86));
+  const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', opts.quality ?? 0.86));
   if (!blob) return file;
   return { uri: URL.createObjectURL(blob), name: file.name.replace(/\.[^.]+$/, '') + '.jpg', type: 'image/jpeg', size: blob.size };
 }
@@ -92,6 +94,13 @@ const fromAsset = (a: ImagePicker.ImagePickerAsset): Picked => ({
   uri: a.uri, name: a.fileName ?? `${a.type === 'video' ? 'video' : 'foto'}-${Date.now()}.${a.type === 'video' ? 'mp4' : 'jpg'}`,
   type: a.mimeType ?? (a.type === 'video' ? 'video/mp4' : 'image/jpeg'), size: a.fileSize,
 });
+
+/** Statuses and posts: high definition. Up to 3000 px on the long side and JPEG 92 %; photos already within that size and under 10 MB go up exactly as they are. */
+export async function pickHdPhoto(): Promise<Picked | null> {
+  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+  if (res.canceled || !res.assets[0]) return null;
+  return processWebImage(fromAsset(res.assets[0]), { max: 3000, quality: 0.92, keepUnder: 10 * 1024 * 1024 });
+}
 
 /** Square profile/logo photo. */
 export async function pickPhoto(opts: { square?: boolean; max?: number } = {}): Promise<Picked | null> {

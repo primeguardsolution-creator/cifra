@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BUSINESS_POST_DAYS, StatusKind, postStatus } from '../../lib/api';
 import { friendly } from '../../lib/errors';
 import { bytes } from '../../lib/format';
-import { Picked, pickPhoto, pickVideo, uploadMedia } from '../../lib/media';
+import { Picked, pickHdPhoto, pickVideo, uploadMedia } from '../../lib/media';
 import { useTheme } from '../../theme/ThemeProvider';
 import { statusBackgrounds } from '../../theme/tokens';
 import { Button, Field, IconButton, Pressy, Sheet, SheetRow, Txt, useToast } from '../../ui';
@@ -44,7 +44,7 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
 
   const pick = async (kind: 'image' | 'video') => {
     try {
-      const f = kind === 'image' ? await pickPhoto({ max: 1600 }) : await pickVideo();
+      const f = kind === 'image' ? await pickHdPhoto() : await pickVideo();
       if (!f) return;
       if (kind === 'video' && Platform.OS === 'web' && canPrepVideo()) {
         // too long / too heavy / full HD: trim and compress it first (see VideoPrep)
