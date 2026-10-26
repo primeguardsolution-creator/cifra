@@ -16,6 +16,7 @@ import { ModePreference, useTheme } from '../../theme/ThemeProvider';
 import { Avatar, Card, Divider, Icon, IconName, Pressy, SectionLabel, Sheet, SheetRow, Toggle, Txt, useToast } from '../../ui';
 import { updateMyProfile } from '../../lib/api';
 import { friendly } from '../../lib/errors';
+import { AppIconSheet } from '../../features/settings/AppIconSheet';
 import { SafetySheet, safetySummary } from '../../features/auth/AccountSafety';
 import { RecoveryStatus, recoveryStatus } from '../../lib/recovery';
 import { PushPrefs, PushStatus, disablePush, enablePush, getPushPrefs, pushStatus, setPushPrefs } from '../../lib/push';
@@ -51,6 +52,7 @@ export default function Settings() {
   const [push, setPush] = useState<PushStatus>('unsupported');
   const [pushBusy, setPushBusy] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [iconOpen, setIconOpen] = useState(false);
   const [safety, setSafety] = useState<RecoveryStatus | null>(null);
   const [prefs, setPrefs] = useState<PushPrefs>({ personal: true, business: true });
   const [langSheet, setLangSheet] = useState(false);
@@ -177,6 +179,7 @@ export default function Settings() {
             <Row icon="star" title="Mensajes destacados" sub="Los que guardaste para encontrarlos rápido" onPress={() => router.push('/starred')} />
             <Divider inset={66} />
             <Row icon="calendar" title="Mis citas" sub="Invitaciones de negocios y citas aceptadas" onPress={() => router.push('/my-appointments')} />
+            {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="color-palette" title="Icono de la app" sub="Elige entre 5 épocas del mismo diseño" onPress={() => setIconOpen(true)} /></>}
             <Divider inset={66} /><Row icon="shield-checkmark" title="Seguridad de la cuenta" sub={safetySummary(safety) || 'Correo y código para recuperar tu acceso'} onPress={() => setSafetyOpen(true)} />
             {lock.available && <><Divider inset={66} /><Row icon="keypad" title="Bloqueo con PIN" sub={lock.enabled ? 'Activado · se bloquea tras 1 minuto fuera de la app' : t('Protege CIFRA con un PIN de {n} dígitos', { n: PIN_DIGITS })} right={<Toggle value={lock.enabled} label="Bloqueo con PIN" onChange={(v) => { setPinError(null); setFirstPin(''); setPinSheet(v ? 'new' : 'off'); }} />} /></>}
             {Platform.OS === 'web' && <><Divider inset={66} /><Row icon="notifications" title="Avisos de mensajes personales"
@@ -210,6 +213,7 @@ export default function Settings() {
         </View>
       </Sheet>
 
+      <AppIconSheet visible={iconOpen} onClose={() => setIconOpen(false)} />
       <SafetySheet visible={safetyOpen} onClose={() => setSafetyOpen(false)} onChanged={setSafety} />
       <Sheet visible={langSheet} onClose={() => setLangSheet(false)} title="Elige el idioma de CIFRA">
         {([['auto', 'Automático (según tu dispositivo)'], ['es', 'Español'], ['en', 'English'], ['de', 'Deutsch']] as const).map(([k, label]) => (

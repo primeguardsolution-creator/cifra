@@ -120,3 +120,7 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 - `20261101_000014_account_recovery.sql` + función Netlify `/api/recovery`: correo verificado con código de 6 dígitos (Brevo) y código de recuperación de un solo uso (XXXX-XXXX-XXXX). Todo se guarda con hash; 5 intentos por código, caducidad de 10 min, 5 envíos por hora, bloqueo de 15 min.
 - Variables Netlify (scope Functions): `BREVO_API_KEY`, `MAIL_FROM_EMAIL` (remitente verificado en Brevo), opcional `MAIL_FROM_NAME`, `RECOVERY_PEPPER` (cadena larga al azar), y las que ya existen: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 - En la app: «¿Olvidaste tu contraseña?» en Iniciar sesión; Ajustes → Seguridad de la cuenta; al entrar, quien no tenga código de recuperación ve el aviso (se puede posponer 3 días).
+
+### Icono de la app y cabecera de la web
+- Icono nuevo (dos burbujas) en 5 épocas: Moderno, Clásico B/N, Retro 70, Neón 80 y Y2K (`public/icons/<variante>/`, generadas por `scripts/make-icons.mjs`). Ajustes → Icono de la app: cambia el icono de la pestaña al instante; el de la pantalla de inicio se fija al añadir la app (enlace `/?icon=<variante>`).
+- Expo (`output: "single"`) ignora `app/+html.tsx`, así que la cabecera real (viewport-fit, meta de iOS, manifest, iconos, Open Graph, colores base) vive en `scripts/head.html` y `scripts/inject-head.mjs` la inserta en `dist/index.html` al compilar (`scripts/build-web.sh`).
