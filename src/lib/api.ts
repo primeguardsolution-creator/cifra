@@ -26,7 +26,7 @@ export type Chat = {
 export type Message = {
   id: string; conversation_id: string; sender_id: string; body: string | null; attachment_path: string | null; attachment_type: string | null;
   attachment_name: string | null; attachment_size: number | null; attachment_duration_ms: number | null; reply_to_id: string | null; edited_at: string | null; deleted_at: string | null;
-  created_at: string; is_internal: boolean; is_automated: boolean; pending?: boolean; failed?: boolean; localUri?: string;
+  created_at: string; is_internal: boolean; is_automated: boolean; is_broadcast?: boolean; pending?: boolean; failed?: boolean; localUri?: string;
 };
 export type Reaction = { message_id: string; user_id: string; emoji: string };
 
@@ -93,7 +93,7 @@ export const updateBusinessConversation = (id: string, v: { state?: Conversation
   rpc<void>('update_business_conversation', { p_conv: id, p_state: v.state ?? null, p_assigned: v.assigned ?? null, p_unassign: v.assigned === null });
 
 // ───────── Messages ─────────
-const messageCols = 'id, conversation_id, sender_id, body, attachment_path, attachment_type, attachment_name, attachment_size, attachment_duration_ms, reply_to_id, edited_at, deleted_at, created_at, is_internal, is_automated';
+const messageCols = 'id, conversation_id, sender_id, body, attachment_path, attachment_type, attachment_name, attachment_size, attachment_duration_ms, reply_to_id, edited_at, deleted_at, created_at, is_internal, is_automated, is_broadcast';
 export const PAGE = 40;
 export async function fetchMessages(conversationId: string, before?: string): Promise<Message[]> {
   let q = supabase.from('messages').select(messageCols).eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(PAGE);

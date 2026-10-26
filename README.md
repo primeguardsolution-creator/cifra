@@ -127,3 +127,6 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 
 ### Migración 15 · eliminar mi cuenta
 `20261102_000015_delete_account.sql`: `delete_my_account()` borra a la persona (perfil, mensajes, estados, contactos, dispositivos de aviso) y los negocios que tiene ella sola; los chats compartidos se quedan para los demás (la creación pasa a otro miembro). Si es propietaria de un negocio con equipo, lo impide hasta que lo traspase o quite al equipo. En la app: Ajustes → Eliminar mi cuenta (pide contraseña y escribir ELIMINAR; antes borra sus archivos del almacenamiento).
+
+### Migración 16 · Difusión (mensaje a todos los clientes)
+`20261103_000016_broadcasts.sql`: `send_broadcast` (solo propietario, administradores y supervisores) envía un mensaje a los clientes con cuenta de CIFRA, en su chat normal con el negocio, marcado como difusión. Excluye al equipo, a quien se dio de baja (`broadcast_optout`, un toque en el mensaje) y a quien bloqueó al remitente. Límites: 3 por negocio cada 24 h y 500 destinatarios. En la app: Business → Difusión (accesos rápidos de la Bandeja, Más y barra lateral).

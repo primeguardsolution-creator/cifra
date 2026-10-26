@@ -19,6 +19,7 @@ export type BubbleProps = {
   onReact: (m: Message, emoji: string) => void; starred?: boolean; highlight?: boolean; onReply?: (m: Message) => void; onCallBack?: (kind: 'audio' | 'video') => void;
   /** Business team view: Slack-style message rows instead of bubbles. */
   slack?: boolean; slackName?: string; authorId?: string; authorAvatar?: string | null; isCustomer?: boolean;
+  /** Customer side of a broadcast: stop receiving broadcasts from this business. */ onBroadcastOptOut?: () => void;
 };
 
 const urlRe = /(https?:\/\/[^\s]+)/g;
@@ -130,6 +131,7 @@ function BubbleBase(p: BubbleProps) {
               <Txt v="mono" tone="faint">{messageTime(m.created_at)}</Txt>
               {m.edited_at && !deleted && <Txt v="caption" tone="faint">(editado)</Txt>}
               {m.is_automated && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="flash" size={10} color={c.highlight} /><Txt v="mono" tone="faint">AUTOMÁTICO</Txt></View>}
+              {m.is_broadcast && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="megaphone" size={10} color={c.highlight} /><Txt v="mono" tone="faint">DIFUSIÓN</Txt></View>}
             </View>
           )}
           <View style={internal ? { borderLeftWidth: 3, borderLeftColor: c.internalBorder, backgroundColor: c.internal, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2, borderRadius: 3 } : undefined}>
@@ -185,6 +187,7 @@ function BubbleBase(p: BubbleProps) {
         >
           {internal && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}><Icon name="lock-closed" size={11} tone="muted" /><Txt v="mono" tone="muted">NOTA INTERNA{p.author ? ` · ${p.author}` : ''}</Txt></View>}
           {m.is_automated && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}><Icon name="flash" size={11} color={mine ? c.bubbleOutMeta : c.highlight} /><Txt v="mono" style={{ color: meta }}>RESPUESTA AUTOMÁTICA</Txt></View>}
+          {m.is_broadcast && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}><Icon name="megaphone" size={11} color={mine ? c.bubbleOutMeta : c.highlight} /><Txt v="mono" style={{ color: meta }}>DIFUSIÓN</Txt></View>}
           {p.showAuthor && p.author && !internal && <Txt v="smallStrong" style={{ color: c.highlight, marginBottom: 2 }}>{p.author}</Txt>}
           {p.replyTo !== undefined && m.reply_to_id && (
             <Pressy onPress={() => p.onJumpTo?.(m.reply_to_id!)} scale={0.99} style={{ borderLeftWidth: 3, borderLeftColor: c.highlight, backgroundColor: mine ? 'rgba(255,255,255,0.12)' : c.surfaceAlt, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 6 }}>
@@ -211,6 +214,7 @@ function BubbleBase(p: BubbleProps) {
               ) : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
             </>
           )}
+          {m.is_broadcast && !mine && p.onBroadcastOptOut && !deleted && <Pressy onPress={p.onBroadcastOptOut} accessibilityRole="button" scale={0.97} style={{ marginTop: 6, alignSelf: 'flex-start' }}><Txt v="caption" style={{ color: c.accent, textDecorationLine: 'underline' }}>No recibir más difusiones de este negocio</Txt></Pressy>}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 3 }}>
             {p.starred && <Icon name="star" size={11} color={mine && !incognito ? '#F6D77A' : c.warning} />}
             {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>editado</Txt>}

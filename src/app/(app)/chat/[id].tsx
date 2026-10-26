@@ -14,6 +14,7 @@ import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/
 import { VideoModal } from '../../../features/chat/VideoPlayer';
 import { ConversationState, Message, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
+import { broadcastOptOut } from '../../../lib/biz';
 import { dayLabel } from '../../../lib/format';
 import { WIDE } from '../../../lib/layout';
 import { formatPhone } from '../../../lib/phone';
@@ -224,6 +225,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
             replyTo={m.reply_to_id ? target : undefined} replyAuthor={target ? nameOf(target.sender_id) : undefined}
             reactions={conv.reactions.filter((x) => x.message_id === m.id)}
             onOpenActions={setActionFor} onOpenImage={setViewer} onOpenVideo={setVideo} onJumpTo={jumpTo} onReply={(x) => { setReplyTo(x); setEditing(null); }} onCallBack={call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && !incognito ? (kind) => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, kind) : undefined}
+            onBroadcastOptOut={!agent && chat?.kind === 'business' && chat.business_id ? () => { broadcastOptOut(chat.business_id!).then(() => toast.show('Listo: no recibirás más difusiones de este negocio', 'success')).catch((e) => toast.show(friendly(e), 'error')); } : undefined}
             onRetry={(x) => guard(() => conv.retry(x))} onReact={(x, e) => guard(() => conv.react(x.id, conv.reactions.some((r) => r.message_id === x.id && r.user_id === me && r.emoji === e) ? null : e))}
           />
         );

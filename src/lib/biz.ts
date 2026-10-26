@@ -90,3 +90,11 @@ export function parseApptCard(body: string | null): { label: string; title: stri
 export async function getAppointment(id: string): Promise<Appointment | null> {
   return unwrap<Appointment | null>(await supabase.from('appointments').select(apptCols).eq('id', id).maybeSingle());
 }
+
+// ── Broadcasts ("Difusión") ──
+export type BroadcastRow = { id: string; body: string; recipients: number; created_at: string; sent_by_name: string | null };
+export const broadcastAudience = async (business: string, stage: Stage | null, tag: string | null) =>
+  (await rpc<{ total: number; reachable: number }[]>('broadcast_audience', { p_business: business, p_stage: stage, p_tag: tag || null }))[0] ?? { total: 0, reachable: 0 };
+export const sendBroadcast = (business: string, body: string, stage: Stage | null, tag: string | null) => rpc<number>('send_broadcast', { p_business: business, p_body: body, p_stage: stage, p_tag: tag || null });
+export const listBroadcasts = (business: string) => rpc<BroadcastRow[]>('list_broadcasts', { p_business: business });
+export const broadcastOptOut = (business: string, out = true) => rpc<void>('broadcast_optout', { p_business: business, p_out: out });

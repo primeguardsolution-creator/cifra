@@ -89,6 +89,8 @@ await db.exec(migration('20261101_000014_account_recovery.sql'));
 await db.exec(migration('20261101_000014_account_recovery.sql'));
 await db.exec(migration('20261102_000015_delete_account.sql'));
 await db.exec(migration('20261102_000015_delete_account.sql'));
+await db.exec(migration('20261103_000016_broadcasts.sql'));
+await db.exec(migration('20261103_000016_broadcasts.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -880,6 +882,40 @@ await check('Borrar mi cuenta: se va todo lo mio, lo compartido se queda y un ne
   eq((await q(`select created_by from public.conversations where id = $1`, [g]))[0].created_by, ids.ana); // ana inherits the group
   eq((await q(`select body from public.messages where conversation_id = $1 order by created_at`, [g])).map((r) => r.body), ['de ana']); // zed's messages are gone, ana's stay
   await as('ana', async () => eq((await q(`select count(*)::int as n from public.messages where conversation_id = $1`, [g]))[0].n, 1));
+});
+
+await check('Difusion: solo la direccion, solo a clientes con cuenta que no se dieron de baja; limites diarios', async () => {
+  const mk = async (phone, name) => (await q(`insert into auth.users (phone, raw_user_meta_data, phone_confirmed_at) values ($1, $2, now()) returning id`, [phone, JSON.stringify({ display_name: name })]))[0].id;
+  const u1 = await mk('34600000095', 'Cli Uno'); const u2 = await mk('34600000096', 'Cli Dos'); ids.cli1 = u1; ids.cli2 = u2;
+  for (const [u, n, st] of [[u1, 'Cli Uno', 'lead'], [u2, 'Cli Dos', 'won']]) await q(`insert into public.customers (business_id, user_id, name, stage) values ($1, $2, $3, $4)`, [biz, u, n, st]);
+  await q(`insert into public.customers (business_id, name) values ($1, 'Sin cuenta')`, [biz]); // a manual contact without an account cannot be reached
+  await as('cleo', async () => denied(db.query(`select * from public.broadcast_audience($1)`, [biz]), 'agent audience'));
+  await as('cleo', async () => denied(db.query(`select public.send_broadcast($1, 'hola')`, [biz]), 'agent send'));
+  await as('dani', async () => denied(db.query(`select public.send_broadcast($1, 'hola')`, [biz]), 'viewer send'));
+  const before = (await as('ana', () => q(`select reachable from public.broadcast_audience($1)`, [biz])))[0].reachable;
+  eq((await as('ana', () => q(`select total, reachable from public.broadcast_audience($1, 'won')`, [biz])))[0], { total: 1, reachable: 1 });
+  await as('ana', async () => denied(db.query(`select public.send_broadcast($1, '   ')`, [biz]), 'empty'));
+  // customer two leaves the list with one tap (their own switch)
+  await as('cli2', () => db.query(`select public.broadcast_optout($1, true)`, [biz]));
+  eq((await as('cli2', () => q(`select public.get_broadcast_optout($1) as o`, [biz])))[0].o, true);
+  eq((await as('cli1', () => q(`select public.get_broadcast_optout($1) as o`, [biz])))[0].o, false);
+  const sent = await as('ana', async () => (await q(`select public.send_broadcast($1, 'Rebajas de otono') as n`, [biz]))[0].n);
+  eq(sent, before - 1);
+  eq((await q(`select count(*)::int as n from public.messages where is_broadcast and body = 'Rebajas de otono'`))[0].n, sent);
+  const mine = (id) => q(`select count(*)::int as n from public.messages m join public.conversations c on c.id = m.conversation_id where m.is_broadcast and c.customer_id = $1`, [id]);
+  eq((await mine(u1))[0].n, 1);
+  eq((await mine(u2))[0].n, 0);
+  await as('cli1', async () => eq((await q(`select count(*)::int as n from public.messages where is_broadcast`))[0].n, 1)); // sees only their own chat
+  // customer one also leaves; the next broadcast reaches one fewer; coming back works too
+  await as('cli1', () => db.query(`select public.broadcast_optout($1, true)`, [biz]));
+  eq(await as('ana', async () => (await q(`select public.send_broadcast($1, 'Segunda') as n`, [biz]))[0].n), before - 2);
+  await as('cli1', () => db.query(`select public.broadcast_optout($1, false)`, [biz]));
+  eq(await as('ana', async () => (await q(`select public.send_broadcast($1, 'Tercera') as n`, [biz]))[0].n), before - 1);
+  // daily limit: 3 per business
+  await as('ana', async () => denied(db.query(`select public.send_broadcast($1, 'Cuarta')`, [biz]), 'daily limit'));
+  eq((await as('ana', () => q(`select count(*)::int as n from public.list_broadcasts($1)`, [biz])))[0].n, 3);
+  await as('cleo', async () => denied(db.query(`select * from public.list_broadcasts($1)`, [biz]), 'history for agents'));
+  await as('ben', async () => denied(db.query(`select * from public.broadcasts`), 'table is private'));
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
