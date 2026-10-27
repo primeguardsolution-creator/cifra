@@ -138,3 +138,8 @@ CIFRA ships in Spanish, English and German (`src/i18n`). The language follows th
 
 ### Migración 19 · encuestas
 `20261106_000019_polls.sql`: encuestas en chats directos y de grupo (2 a 6 opciones, una o varias respuestas, voto privado, solo la persona que la creó puede cerrarla). Se adjuntan desde «+» → Encuesta.
+
+### Textos legales y publicación en la App Store
+- Términos de uso y Política de privacidad completos en español, inglés y alemán: `src/legal/*.ts` (se muestran en `/terms` y `/privacy`). Los datos del responsable (nombre legal, dirección, correo, ley aplicable) se rellenan en `src/legal/company.ts`; son obligatorios antes de publicar en las tiendas.
+- `eas.json` y los datos de iOS/Android de `app.json` están listos para `eas build` / `eas submit`.
+- Selección de texto: en pantallas táctiles el texto no se selecciona con pulsación larga (abre el menú del mensaje); en escritorio funciona la selección normal.

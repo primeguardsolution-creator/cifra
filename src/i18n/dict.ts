@@ -1369,4 +1369,5 @@ export const rows: [string, string, string][] = [
   ["Añadir opción", "Add option", "Option hinzufügen"],
   ["Permitir varias respuestas", "Allow multiple answers", "Mehrere Antworten erlauben"],
   ["Enviar encuesta", "Send poll", "Umfrage senden"],
+  ["Última actualización", "Last updated", "Zuletzt aktualisiert"],
 ];
