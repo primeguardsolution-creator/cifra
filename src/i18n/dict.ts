@@ -1392,4 +1392,5 @@ export const rows: [string, string, string][] = [
   ["{name} atendió la llamada", "{name} took the call", "{name} hat den Anruf angenommen"],
   ["Otra persona atendió la llamada", "Someone else took the call", "Jemand anderes hat den Anruf angenommen"],
   ["No se pudo compartir la pantalla.", "Could not share the screen.", "Bildschirm konnte nicht geteilt werden."],
+  ["Última actualización", "Last updated", "Zuletzt aktualisiert"],
 ];
