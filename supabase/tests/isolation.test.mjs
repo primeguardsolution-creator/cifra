@@ -1059,5 +1059,18 @@ await check('Correo verificado: hace falta para crear un negocio o abrir un chat
   if (fresh) await as('dani', async () => eq(typeof (await q(`select public.start_business_chat($1) as id`, [fresh.id]))[0].id, 'string'));
 });
 
+await db.exec(migration('20261109_000022_billing.sql'));
+await db.exec(migration('20261109_000022_billing.sql'));
+await check('Cobros: el plan solo lo leen propietario/admin y solo lo escribe el servidor', async () => {
+  const biz = (await q(`select id, owner_id from public.businesses limit 1`))[0];
+  const owner = Object.entries(ids).find(([, v]) => v === biz.owner_id)?.[0];
+  const outsider = Object.keys(ids).find((n) => ids[n] !== biz.owner_id && !['gus'].includes(n));
+  await q(`insert into public.business_billing (business_id, stripe_customer_id, status) values ($1, 'cus_test', 'active')`, [biz.id]);
+  if (owner) await as(owner, async () => eq((await q(`select status from public.business_billing where business_id = $1`, [biz.id])).length, 1));
+  await as(outsider, async () => eq((await q(`select * from public.business_billing`)).length, 0));
+  if (owner) await as(owner, async () => denied(db.query(`update public.business_billing set status = 'canceled' where business_id = $1`, [biz.id]), 'owner cannot write the plan'));
+  await as(outsider, async () => denied(db.query(`insert into public.business_billing (business_id) values ($1)`, [biz.id]), 'outsider cannot insert'));
+});
+
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);

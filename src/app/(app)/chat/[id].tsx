@@ -10,6 +10,7 @@ import { Bubble } from '../../../features/chat/Bubble';
 import { Composer } from '../../../features/chat/Composer';
 import { PullToRefresh } from '../../../features/chat/PullToRefresh';
 import { IncognitoBar, IncognitoGone, IncognitoStartSheet } from '../../../features/chat/Incognito';
+import { FlyAvatar } from '../../../features/chat/FlyAvatar';
 import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/chat/UnknownContact';
 import { VideoModal } from '../../../features/chat/VideoPlayer';
 import { ConversationState, Message, fetchMemberReads, getProfiles, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
@@ -205,7 +206,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingBottom: 8, minHeight: 56 }}>
         {!wide && <IconButton icon="chevron-back" label="Volver" onPress={() => (router.canGoBack() ? router.back() : router.replace(agent ? '/inbox' : '/chats'))} />}
         <Pressy onPress={openProfile} accessibilityRole="button" accessibilityLabel="Ver perfil" scale={0.99} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: wide ? 10 : 2 }}>
-          {chat && (incognito ? <View style={{ width: 42, height: 42, borderRadius: 4, borderWidth: 1.5, borderColor: c.text, alignItems: 'center', justifyContent: 'center' }}><Icon name="glasses" size={24} tone="text" /></View> : <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={42} group={chat.kind === 'group'} business={chat.kind === 'business' && !agent} />)}
+          {chat && <FlyAvatar conv={id}>{incognito ? <View style={{ width: 42, height: 42, borderRadius: 4, borderWidth: 1.5, borderColor: c.text, alignItems: 'center', justifyContent: 'center' }}><Icon name="glasses" size={24} tone="text" /></View> : <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={42} group={chat.kind === 'group'} business={chat.kind === 'business' && !agent} />}</FlyAvatar>}
           <View style={{ flex: 1 }}>
             <Txt v="bodyStrong" numberOfLines={1}>{chat ? chatTitle(chat) : ' '}</Txt>
             {conv.typingNow.length ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><TypingDots size={4} /><Txt v="caption" tone="accent" numberOfLines={1}>{chat?.kind === 'group' ? t('{name} escribe', { name: nameOf(conv.typingNow[0]) }) : 'escribiendo'}</Txt></View> : <Txt v="caption" tone="muted" numberOfLines={1}>{subtitle}</Txt>}
