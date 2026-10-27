@@ -72,21 +72,32 @@ export function ChatRow({ chat, selected, showState, onMenu, typing, index = 0 }
     glowPlayed.add(k);
     glow.setValue(0); sweep.setValue(0);
     Animated.parallel([
-      Animated.sequence([Animated.timing(glow, { toValue: 1, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: nat }), Animated.delay(900), Animated.timing(glow, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: nat })]),
-      Animated.timing(sweep, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: nat }),
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 0.78, duration: 340, easing: Easing.out(Easing.cubic), useNativeDriver: nat }),
+        Animated.timing(glow, { toValue: 1, duration: 190, easing: Easing.out(Easing.quad), useNativeDriver: nat }),
+        Animated.delay(520),
+        Animated.timing(glow, { toValue: 0, duration: 1750, easing: Easing.inOut(Easing.quad), useNativeDriver: nat }),
+      ]),
+      Animated.timing(sweep, { toValue: 1, duration: 1320, easing: Easing.inOut(Easing.cubic), useNativeDriver: nat }),
     ]).start();
   }, [newAt, reduced, chat.id, glow, sweep]);
   // First paint after Personal ⇄ Business: the rows slide in from the side the new space lives on. Scrolling never triggers it.
   const enterRef = useRef(!reduced ? recentSpaceSwitch() : null);
   const enter = useRef(new Animated.Value(enterRef.current ? 0 : 1)).current;
-  useEffect(() => { if (enterRef.current) Animated.timing(enter, { toValue: 1, duration: 300, delay: 120 + Math.min(index, 7) * 45, easing: Easing.out(Easing.cubic), useNativeDriver: nat }).start(); }, [enter, index]);
+  useEffect(() => {
+    if (!enterRef.current) return;
+    Animated.sequence([
+      Animated.delay(90 + Math.min(index, 7) * 42),
+      Animated.spring(enter, { toValue: 1, useNativeDriver: nat, damping: 20, stiffness: 145, mass: 0.82 }),
+    ]).start();
+  }, [enter, index]);
   const avatarRef = useRef<View>(null);
   const open = () => {
     if (!reduced) avatarRef.current?.measureInWindow?.((x, y, w) => { if (w > 0) setSharedAvatar(chat.id, x, y, w); });
     router.push({ pathname: '/chat/[id]', params: { id: chat.id } });
   };
   return (
-    <Animated.View onLayout={(e) => setRowW(e.nativeEvent.layout.width)} style={{ opacity: enter, transform: [{ translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [(enterRef.current?.dir ?? 0) * 24, 0] }) }] }}>
+    <Animated.View onLayout={(e) => setRowW(e.nativeEvent.layout.width)} style={{ opacity: enter, transform: [{ translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [(enterRef.current?.dir ?? 0) * 28, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) }] }}>
     {isNew && !reduced && (
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 6, right: 6, top: 2, bottom: 2, borderRadius: 16, overflow: 'hidden', opacity: glow, borderWidth: 1.5, borderColor: c.accent, backgroundColor: c.accentSoft, shadowColor: c.accent, shadowOpacity: 0.45, shadowRadius: 14 }}>
         <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, width: 140, transform: [{ translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-140, Math.max(rowW, 320)] }) }] }}>
