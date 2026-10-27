@@ -90,7 +90,13 @@ function BubbleBase(p: BubbleProps) {
   useEffect(() => {
     if ((enter as unknown as { _value: number })._value >= 1) return;
     if (reduced) { enter.setValue(1); return; }
-    Animated.timing(enter, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
+    Animated.spring(enter, {
+      toValue: 1,
+      useNativeDriver: native,
+      damping: 19,
+      stiffness: 150,
+      mass: 0.78,
+    }).start();
   }, [enter, native, reduced]);
   const pan = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dx > 14 && g.dx > Math.abs(g.dy) * 2 && !latest.current.m.deleted_at && !latest.current.m.pending,
@@ -126,7 +132,7 @@ function BubbleBase(p: BubbleProps) {
     const first = !p.joinedOlder;
     return (
       <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})}
-        style={{ flexDirection: 'row', gap: 11, paddingHorizontal: 14, paddingTop: first ? 10 : 1, paddingBottom: 1, backgroundColor: p.highlight ? c.accentSoft : hover ? c.surfaceAlt : 'transparent', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
+        style={{ flexDirection: 'row', gap: 11, paddingHorizontal: 14, paddingTop: first ? 10 : 1, paddingBottom: 1, backgroundColor: p.highlight ? c.accentSoft : hover ? c.surfaceAlt : 'transparent', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 18 : 10, 0] }) }] }}>
         <View style={{ width: 36, alignItems: 'center', paddingTop: first ? 2 : 4 }}>
           {first ? <Avatar name={name} seed={p.authorId ?? name} path={p.authorAvatar} size={36} /> : hover ? <Txt style={{ fontFamily: 'GeistMono_500Medium', fontSize: 9, color: c.textFaint }}>{messageTime(m.created_at)}</Txt> : null}
         </View>
@@ -183,7 +189,7 @@ function BubbleBase(p: BubbleProps) {
   }
 
   return (
-    <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})} style={{ paddingHorizontal: 12, marginTop: p.joinedOlder ? 2 : 10, alignItems: mine ? 'flex-end' : 'flex-start', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 12 : 8, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 0.97 : 0.985, 1] }) }] }}>
+    <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})} style={{ paddingHorizontal: 12, marginTop: p.joinedOlder ? 2 : 10, alignItems: mine ? 'flex-end' : 'flex-start', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 38 : 10, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 0.94 : 0.985, 1] }) }] }}>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: -2, top: '50%', marginTop: -16, width: 32, height: 32, borderRadius: 16, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center', opacity: dx.interpolate({ inputRange: [0, 40], outputRange: [0, 1], extrapolate: 'clamp' }), transform: [{ scale: dx.interpolate({ inputRange: [0, 40], outputRange: [0.4, 1], extrapolate: 'clamp' }) }, { translateX: -34 }] }}>
         <Icon name="arrow-undo" size={17} color={c.accentSoftText} />
       </Animated.View>
