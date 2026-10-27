@@ -28,7 +28,7 @@ export function prefersReducedMotion(): boolean {
 /** Personal ⇄ Business: remembers when and in which direction the space changed, so the rows of the new inbox can slide in (and only then, not when scrolling). */
 let switched = { at: 0, dir: 1 };
 export const markSpaceSwitch = (to: 'personal' | 'business') => { switched = { at: Date.now(), dir: to === 'business' ? 1 : -1 }; };
-export const recentSpaceSwitch = () => (Date.now() - switched.at < 700 ? switched : null);
+export const recentSpaceSwitch = () => (Date.now() - switched.at < 900 ? switched : null);
 
 /** Inbox row → conversation: the window position of the avatar that was tapped, so the chat header can fly it into place. */
 let shared: { conv: string; x: number; y: number; size: number; at: number } | null = null;

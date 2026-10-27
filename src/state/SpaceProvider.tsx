@@ -1,11 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Platform } from 'react-native';
 import { BusinessMembership, myBusinesses } from '../lib/api';
 import { useTheme } from '../theme/ThemeProvider';
 import { Space, legacyBizAccent } from '../theme/tokens';
-import { markSpaceSwitch } from '../lib/motion';
+import { markSpaceSwitch, useReducedMotion } from '../lib/motion';
 import { SpaceTransition } from '../components/SpaceTransition';
 import { useAuth } from './AuthProvider';
 
@@ -29,7 +28,6 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Space | null>(null);
-  const fade = useRef(new Animated.Value(0)).current;
 
   const refreshBusinesses = useCallback(async () => {
     try { setBusinesses(await myBusinesses()); } catch { /* offline: keep previous */ } finally { setLoaded(true); }
@@ -43,25 +41,27 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
   // The Business space wears the colour of the active business, so switching businesses switches the whole workspace look.
   useEffect(() => { if (active) setBizAccent(legacyBizAccent(active.business.accent)); }, [active?.business.id, active?.business.accent, setBizAccent]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const reduced = useReducedMotion();
+  const commit = useCallback((target: Space) => {
+    markSpaceSwitch(target);
+    setSpace(target);
+    router.replace(target === 'business' ? '/inbox' : '/chats');
+  }, [setSpace]);
   const switchSpace = useCallback((next?: Space) => {
     const target: Space = next ?? (space === 'personal' ? 'business' : 'personal');
-    if (target === space) return;
-    const native = Platform.OS !== 'web';
+    if (target === space || overlay) return;
+    if (reduced) { commit(target); return; } // reduced motion: switch at once, no animation
     setOverlay(target);
-    Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: native }).start(() => {
-      markSpaceSwitch(target);
-      setSpace(target);
-      router.replace(target === 'business' ? '/inbox' : '/chats');
-      setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 320, useNativeDriver: native }).start(() => setOverlay(null)), 750);
-    });
-  }, [space, fade, setSpace]);
+  }, [space, overlay, reduced, commit]);
+  const covered = useCallback(() => { if (overlay) commit(overlay); }, [overlay, commit]);
+  const done = useCallback(() => setOverlay(null), []);
 
   const value = useMemo(() => ({ space, businesses, loaded, active, setActiveBusiness, switchSpace, refreshBusinesses }), [space, businesses, loaded, active, setActiveBusiness, switchSpace, refreshBusinesses]);
 
   return (
     <Ctx.Provider value={value}>
       {children}
-      {overlay && <SpaceTransition to={overlay} opacity={fade} />}
+      {overlay && <SpaceTransition key={overlay} to={overlay} onCovered={covered} onDone={done} />}
     </Ctx.Provider>
   );
 }

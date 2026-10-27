@@ -166,7 +166,7 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
         keyExtractor={(x) => x.id}
         ListHeaderComponent={<>{header}{!business && filter === 'all' && !q && <InvitationsBanner />}{atRow}{botRow}</>}
         ListEmptyComponent={body}
-        renderItem={({ item }) => <ChatRow chat={item} selected={item.id === selectedId} showState={business} onMenu={business ? undefined : setMenuFor} />}
+        renderItem={({ item, index }) => <ChatRow index={index} chat={item} selected={item.id === selectedId} showState={business} onMenu={business ? undefined : setMenuFor} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} />}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: embedded ? 24 : 12 }}
