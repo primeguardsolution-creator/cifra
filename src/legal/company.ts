@@ -5,13 +5,13 @@
  */
 export const COMPANY = {
   /** Legal name of the person or company that operates CIFRA, e.g. "Anela Tech Studio" */
-  legalName: '',
+  legalName: 'Anela Tech & Design Studio',
   /** Postal address (street, postcode, city, country) */
-  address: '',
+  address: 'Ystader Straße 13, 10437 Berlin, Alemania',
   /** Contact e-mail for support, privacy requests and legal notices */
-  email: '',
+  email: 'contact@anela.studio',
   /** Country whose law governs the terms, e.g. "Alemania" / "Germany" / "Deutschland" (per language below) */
-  law: { es: '', en: '', de: '' },
+  law: { es: 'Alemania', en: 'Germany', de: 'Deutschland' },
   /** Date of the current version of both documents (YYYY-MM-DD) */
   updated: '2026-10-27',
 };
