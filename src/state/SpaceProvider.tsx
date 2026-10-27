@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Platform, View } from 'react-native';
+import { Animated, Platform } from 'react-native';
 import { BusinessMembership, myBusinesses } from '../lib/api';
 import { useTheme } from '../theme/ThemeProvider';
 import { Space, legacyBizAccent } from '../theme/tokens';
-import { Icon, Txt } from '../ui';
+import { SpaceTransition } from '../components/SpaceTransition';
 import { useAuth } from './AuthProvider';
 
 type SpaceState = {
@@ -47,30 +47,19 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
     if (target === space) return;
     const native = Platform.OS !== 'web';
     setOverlay(target);
-    Animated.timing(fade, { toValue: 1, duration: 170, useNativeDriver: native }).start(() => {
+    Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: native }).start(() => {
       setSpace(target);
       router.replace(target === 'business' ? '/inbox' : '/chats');
-      setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 260, useNativeDriver: native }).start(() => setOverlay(null)), 220);
+      setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 320, useNativeDriver: native }).start(() => setOverlay(null)), 750);
     });
   }, [space, fade, setSpace]);
 
   const value = useMemo(() => ({ space, businesses, loaded, active, setActiveBusiness, switchSpace, refreshBusinesses }), [space, businesses, loaded, active, setActiveBusiness, switchSpace, refreshBusinesses]);
 
-  const to = overlay === 'business';
   return (
     <Ctx.Provider value={value}>
       {children}
-      {overlay && (
-        <Animated.View pointerEvents="auto" style={{ position: 'absolute', inset: 0, opacity: fade, backgroundColor: to ? '#000000' : '#1B1440', alignItems: 'center', justifyContent: 'center', zIndex: 2000 } as object}>
-          <View style={{ alignItems: 'center', gap: 14 }}>
-            <View style={{ width: 72, height: 72, borderRadius: to ? 10 : 28, backgroundColor: to ? '#F5A524' : '#9B86FF', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name={to ? 'storefront' : 'person'} size={34} color={to ? '#1A1100' : '#0E0630'} />
-            </View>
-            <Txt v="h2" style={{ color: '#fff' }}>{to ? 'Espacio Business' : 'Espacio Personal'}</Txt>
-            <Txt v="small" style={{ color: 'rgba(255,255,255,0.6)' }}>{to ? 'Bandeja, agenda, clientes y Doer' : 'Tus conversaciones privadas'}</Txt>
-          </View>
-        </Animated.View>
-      )}
+      {overlay && <SpaceTransition to={overlay} opacity={fade} />}
     </Ctx.Provider>
   );
 }

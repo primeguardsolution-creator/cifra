@@ -1393,4 +1393,5 @@ export const rows: [string, string, string][] = [
   ["Otra persona atendió la llamada", "Someone else took the call", "Jemand anderes hat den Anruf angenommen"],
   ["No se pudo compartir la pantalla.", "Could not share the screen.", "Bildschirm konnte nicht geteilt werden."],
   ["Última actualización", "Last updated", "Zuletzt aktualisiert"],
+  ["Para hacer esto verifica tu correo en Ajustes → Seguridad de la cuenta.", "To do this, verify your e-mail in Settings → Account security.", "Dafür bestätige bitte deine E-Mail unter Einstellungen → Kontosicherheit."],
 ];

@@ -1044,5 +1044,20 @@ await check('Llamadas de Business: senales entre equipo y cliente, salas de grup
   await sig('eva', ids.ana, 'invite');
 });
 
+// The gate goes in last: the earlier checks create businesses and chats with accounts that never verified an e-mail.
+await db.exec(migration('20261108_000021_verified_email_gate.sql'));
+await db.exec(migration('20261108_000021_verified_email_gate.sql'));
+await check('Correo verificado: hace falta para crear un negocio o abrir un chat nuevo con uno', async () => {
+  const mine = async (n) => as(n, async () => (await q(`select public.has_verified_email() as v`))[0].v);
+  eq(await mine('dani'), false);
+  await as('dani', async () => denied(db.query(`select public.create_business('Sin correo', null, null, null, null)`), 'create without e-mail'));
+  const fresh = (await q(`select b.id from public.businesses b where b.is_public and not exists (select 1 from public.conversations c where c.business_id = b.id and c.customer_id = $1) and b.owner_id <> $1 and not exists (select 1 from public.business_members m where m.business_id = b.id and m.user_id = $1) limit 1`, [ids.dani]))[0];
+  if (fresh) await as('dani', async () => denied(db.query(`select public.start_business_chat($1)`, [fresh.id]), 'new chat without e-mail'));
+  await q(`insert into public.account_recovery (user_id, email, email_verified_at) values ($1, 'dani@example.com', now()) on conflict (user_id) do update set email_verified_at = now()`, [ids.dani]);
+  eq(await mine('dani'), true);
+  await as('dani', async () => eq(typeof (await q(`select public.create_business('Con correo', null, null, null, null) as id`))[0].id, 'string'));
+  if (fresh) await as('dani', async () => eq(typeof (await q(`select public.start_business_chat($1) as id`, [fresh.id]))[0].id, 'string'));
+});
+
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);
