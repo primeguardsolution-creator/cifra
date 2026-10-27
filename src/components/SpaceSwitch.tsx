@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, LayoutChangeEvent, Platform, View } from 'react-native';
+import { useReducedMotion } from '../lib/motion';
 import { useChats } from '../state/ChatsProvider';
 import { useSpace } from '../state/SpaceProvider';
 import { useTheme } from '../theme/ThemeProvider';
@@ -15,6 +16,7 @@ const options: { key: Space; label: string; icon: IconName }[] = [
 /** The one-tap switch between the Personal and Business spaces. */
 export function SpaceSwitch() {
   const { c, space } = useTheme();
+  const reducedMotion = useReducedMotion();
   const { switchSpace } = useSpace();
   const { unread } = useChats();
   const [w, setW] = useState(0);
@@ -24,6 +26,7 @@ export function SpaceSwitch() {
   useEffect(() => {
     if (previousSpace.current === space) return;
     previousSpace.current = space;
+    if (reducedMotion) { x.setValue(space === 'personal' ? 0 : 1); stretch.setValue(1); return; }
     Animated.parallel([
       Animated.spring(x, { toValue: space === 'personal' ? 0 : 1, useNativeDriver: Platform.OS !== 'web', damping: 19, stiffness: 190, mass: 0.82 }),
       Animated.sequence([
@@ -31,7 +34,7 @@ export function SpaceSwitch() {
         Animated.spring(stretch, { toValue: 1, useNativeDriver: Platform.OS !== 'web', damping: 17, stiffness: 230, mass: 0.7 }),
       ]),
     ]).start();
-  }, [space, x, stretch]);
+  }, [space, x, stretch, reducedMotion]);
   const seg = w > 0 ? (w - 8) / 2 : 0;
 
   return (
