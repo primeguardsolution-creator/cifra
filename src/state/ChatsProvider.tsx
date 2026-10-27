@@ -1,14 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, usePathname } from 'expo-router';
-import { Chat, countMissedCalls, getProfiles, listChats, markDelivered } from '../lib/api';
+import { Chat, countMissedCalls, getProfiles, listChats, listContacts, markDelivered } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../ui';
 import { useAuth } from './AuthProvider';
 import { useSpace } from './SpaceProvider';
 import { listenForNotificationTaps, setAppBadge, syncPush } from '../lib/push';
-import { tr } from '../i18n';
+import { t, tr } from '../i18n';
 
 type ChatsState = {
   chats: Chat[];
@@ -19,6 +19,8 @@ type ChatsState = {
   patch: (id: string, change: Partial<Chat>) => void;
   missedCalls: number;
   markCallsSeen: () => void;
+  /** Direct chats where someone who is NOT in my contacts just wrote (live, this session): conversation id → time of that message. */
+  newContacts: Record<string, number>;
 };
 const Ctx = createContext<ChatsState | null>(null);
 
@@ -31,6 +33,9 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missedCalls, setMissedCalls] = useState(0);
+  const [newContacts, setNewContacts] = useState<Record<string, number>>({});
+  const savedIds = useRef(new Set<string>());
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
   const seq = useRef(0);
   const toast = useToast();
   const path = usePathname();
@@ -56,6 +61,22 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
     } finally { if (mine === seq.current) setLoading(false); }
   }, [user, businessId, seenKey]);
 
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+
+  /** A live message from someone I have not saved: flag the conversation. Never guesses: if the contact list cannot be read, nothing is flagged. */
+  const flagIfUnsaved = useCallback(async (conv: string, sender: string) => {
+    if (savedIds.current.has(sender)) return;
+    let chat = listsRef.current.find((x) => x.id === conv);
+    if (!chat) { await refreshRef.current(); chat = listsRef.current.find((x) => x.id === conv); }
+    if (!chat || chat.kind !== 'direct' || chat.perspective !== 'personal' || chat.incognito || chat.peer_id !== sender) return;
+    let saved: boolean;
+    try { saved = (await listContacts()).some((x) => x.contact_user_id === sender); } catch { return; }
+    if (saved) { savedIds.current.add(sender); return; }
+    if (pathRef.current === `/chat/${conv}`) return;
+    setNewContacts((cur) => ({ ...cur, [conv]: Date.now() }));
+    AccessibilityInfo.announceForAccessibility?.(t('Mensaje nuevo de {name}, que no está en tus contactos', { name: chat.peer_name || chat.title || tr('un número nuevo') }));
+  }, []);
+
   const markCallsSeen = useCallback(() => { setMissedCalls(0); AsyncStorage.setItem(seenKey, new Date().toISOString()).catch(() => {}); }, [seenKey]);
 
   useEffect(() => { setLoading(true); refresh(); }, [refresh]);
@@ -68,9 +89,10 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
     const channel = supabase.channel(`inbox:${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         soon();
-        const row = payload.new as { sender_id?: string; body?: string | null; is_internal?: boolean; conversation_id?: string; attachment_type?: string | null; is_automated?: boolean };
+        const row = payload.new as { created_at?: string; sender_id?: string; body?: string | null; is_internal?: boolean; conversation_id?: string; attachment_type?: string | null; is_automated?: boolean };
         if (payload.eventType === 'INSERT' && row.sender_id !== user.id && !row.is_internal) {
           notifyBrowser();
+          if (row.conversation_id && row.sender_id && !row.is_automated && (!row.created_at || Date.now() - new Date(row.created_at).getTime() < 60_000)) flagIfUnsaved(row.conversation_id, row.sender_id).catch(() => {});
           // In-app popup when the message is for a chat that is not on screen (tap to open it).
           const conv = row.conversation_id; const chat = listsRef.current.find((x) => x.id === conv);
           const muted = chat?.muted_until && new Date(chat.muted_until) > new Date();
@@ -95,7 +117,14 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
       .subscribe((status) => { if (status === 'SUBSCRIBED') soon(); });
     const sub = AppState.addEventListener('change', (s) => s === 'active' && soon());
     return () => { clearTimeout(timer); sub.remove(); supabase.removeChannel(channel); };
-  }, [user, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, refresh, flagIfUnsaved]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Opening the chat hands over to the in-chat "add contact / report" bar: the inbox flag is done.
+  useEffect(() => {
+    const m = /^\/chat\/([^/]+)/.exec(path);
+    if (m) setNewContacts((cur) => (m[1] in cur ? Object.fromEntries(Object.entries(cur).filter(([k]) => k !== m[1])) : cur));
+  }, [path]);
+  useEffect(() => { if (!user) { setNewContacts({}); savedIds.current.clear(); } }, [user]);
 
   const chats = space === 'business' ? business : personal;
   const unread = useMemo(() => ({ personal: personal.reduce((n, c) => n + (c.muted_until && new Date(c.muted_until) > new Date() ? 0 : c.unread), 0), business: business.reduce((n, c) => n + c.unread, 0) }), [personal, business]);
@@ -118,7 +147,7 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
     return listenForNotificationTaps((url) => router.push(url as never));
   }, [user]);
 
-  const value = useMemo(() => ({ chats, loading, error, refresh, unread, patch, missedCalls, markCallsSeen }), [chats, loading, error, refresh, unread, patch, missedCalls, markCallsSeen]);
+  const value = useMemo(() => ({ chats, loading, error, refresh, unread, patch, missedCalls, markCallsSeen, newContacts }), [chats, loading, error, refresh, unread, patch, missedCalls, markCallsSeen, newContacts]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

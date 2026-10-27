@@ -1406,4 +1406,7 @@ export const rows: [string, string, string][] = [
   ["Gestionar suscripción", "Manage subscription", "Abo verwalten"],
   ["Activar plan Business", "Start Business plan", "Business-Tarif starten"],
   ["No se pudo abrir el pago. Inténtalo de nuevo.", "Could not open the payment page. Try again.", "Zahlungsseite konnte nicht geöffnet werden. Versuche es erneut."],
+  ["Contacto nuevo", "New contact", "Neuer Kontakt"],
+  ["Mensaje nuevo de {name}, que no está en tus contactos", "New message from {name}, who is not in your contacts", "Neue Nachricht von {name}, der/die nicht in deinen Kontakten ist"],
+  ["un número nuevo", "a new number", "eine neue Nummer"],
 ];
