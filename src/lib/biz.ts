@@ -98,3 +98,10 @@ export const broadcastAudience = async (business: string, stage: Stage | null, t
 export const sendBroadcast = (business: string, body: string, stage: Stage | null, tag: string | null) => rpc<number>('send_broadcast', { p_business: business, p_body: body, p_stage: stage, p_tag: tag || null });
 export const listBroadcasts = (business: string) => rpc<BroadcastRow[]>('list_broadcasts', { p_business: business });
 export const broadcastOptOut = (business: string, out = true) => rpc<void>('broadcast_optout', { p_business: business, p_out: out });
+
+/** Customer side: the team members who can take a call in this business chat (the assigned agent, or the whole front desk). */
+export const businessCallTargets = (conversationId: string) => rpc<{ user_id: string; display_name: string; avatar_path: string | null }[]>('business_call_targets', { p_conv: conversationId });
+/** Team: opens (or reuses) the negotiation room with a customer: a group chat with files, polls and group calls. */
+export const startNegotiation = (businessId: string, customerId: string, members: string[] = []) => rpc<string>('start_negotiation', { p_business: businessId, p_customer: customerId, p_members: members });
+export type Negotiation = { conversation_id: string; customer_id: string; customer_name: string; members: number; created_at: string; last_at: string | null };
+export const listNegotiations = (businessId: string) => rpc<Negotiation[]>('list_negotiations', { p_business: businessId });

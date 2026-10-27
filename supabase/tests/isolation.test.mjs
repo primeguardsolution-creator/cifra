@@ -97,6 +97,8 @@ await db.exec(migration('20261105_000018_disappearing_messages.sql'));
 await db.exec(migration('20261105_000018_disappearing_messages.sql'));
 await db.exec(migration('20261106_000019_polls.sql'));
 await db.exec(migration('20261106_000019_polls.sql'));
+await db.exec(migration('20261107_000020_business_calls.sql'));
+await db.exec(migration('20261107_000020_business_calls.sql'));
 
 const phones = { ana: '34600000001', ben: '34600000002', cleo: '34600000003', dani: '34600000004' };
 for (const [name, phone] of Object.entries(phones)) {
@@ -1009,6 +1011,37 @@ await check('Encuestas: se crean en un chat, un voto por persona (o varios), rec
   await as('ana', () => db.query(`select public.close_poll($1)`, [pid]));
   await as('ben', async () => denied(db.query(`select public.vote_poll($1, $2)`, [pid, pizza]), 'closed'));
   await as('ben', async () => denied(db.query(`select * from public.poll_votes`), 'votes table is private'));
+});
+
+await check('Llamadas de Business: senales entre equipo y cliente, salas de grupo y sala de negociacion', async () => {
+  const sig = (who, to, ev) => as(who, () => db.query(`select public.send_call_signal($1, $2, '{"callId":"c1"}'::jsonb)`, [to, ev]));
+  // team <-> customer and team <-> team can signal; group-call events are allowed
+  await sig('cleo', ids.eva, 'invite'); await sig('eva', ids.cleo, 'accept'); await sig('ana', ids.cleo, 'join'); await sig('cleo', ids.ana, 'media'); await sig('ana', ids.cleo, 'leave');
+  // two unrelated people still cannot, and unknown events are refused
+  await as('ben', async () => denied(db.query(`select public.send_call_signal($1, 'invite', '{}'::jsonb)`, [ids.eva]), 'strangers'));
+  await as('cleo', async () => denied(db.query(`select public.send_call_signal($1, 'hack', '{}'::jsonb)`, [ids.eva]), 'bad event'));
+  // the customer calling the business reaches the team (unassigned) or only the assigned agent
+  const targets = (await as('eva', () => q(`select user_id from public.business_call_targets($1)`, [ids._evaConv]))).map((r) => r.user_id).sort();
+  eq(targets.includes(ids.ana) && targets.includes(ids.cleo) && !targets.includes(ids.dani), true); // owner and agent yes, viewer no
+  await q(`update public.conversations set assigned_to = $1 where id = $2`, [ids.cleo, ids._evaConv]);
+  eq((await as('eva', () => q(`select user_id from public.business_call_targets($1)`, [ids._evaConv]))).map((r) => r.user_id), [ids.cleo]);
+  await q(`update public.conversations set assigned_to = null where id = $1`, [ids._evaConv]);
+  eq((await as('ben', () => q(`select user_id from public.business_call_targets($1)`, [ids._evaConv]))).length, 0); // only that conversation's customer
+  // negotiation room: customer + team members, reused on the second call, files/polls/calls come from being a group chat
+  const card = (await q(`select id from public.customers where business_id = $1 and user_id = $2`, [biz, ids.eva]))[0].id;
+  await as('dani', async () => denied(db.query(`select public.start_negotiation($1, $2)`, [biz, card]), 'viewer'));
+  const room = await as('cleo', async () => (await q(`select public.start_negotiation($1, $2, $3) as id`, [biz, card, [ids.ana]]))[0].id);
+  eq((await q(`select count(*)::int as n from public.conversation_members where conversation_id = $1`, [room]))[0].n, 3); // cleo, eva, ana
+  eq((await as('cleo', async () => (await q(`select public.start_negotiation($1, $2) as id`, [biz, card]))[0].id)), room);
+  await as('eva', async () => eq((await q(`select title from public.conversations where id = $1`, [room]))[0].title.startsWith('Negociaci'), true));
+  await as('ana', async () => eq((await q(`select customer_name, members from public.list_negotiations($1)`, [biz]))[0], { customer_name: (await q(`select name from public.customers where id = $1`, [card]))[0].name, members: 3 }));
+  await as('ben', async () => denied(db.query(`select public.start_negotiation($1, $2)`, [biz, card]), 'outsider'));
+  await as('ben', async () => eq((await q(`select * from public.list_negotiations($1)`, [biz])).length, 0));
+  // a customer without an account cannot be put in a room
+  const manual = (await q(`insert into public.customers (business_id, name) values ($1, 'Sin cuenta B') returning id`, [biz]))[0].id;
+  await as('cleo', async () => denied(db.query(`select public.start_negotiation($1, $2)`, [biz, manual]), 'no account'));
+  // group members can call each other (members of the room share a conversation)
+  await sig('eva', ids.ana, 'invite');
 });
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
