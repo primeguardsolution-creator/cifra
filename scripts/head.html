@@ -31,4 +31,8 @@
           body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
           * { scrollbar-width: thin; }
           textarea, input { outline: none; }
+          /* On touch screens a long press must open the message menu, not select the whole screen; fields stay selectable. Desktop mice keep normal selection. */
+          html, body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+          input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+          @media (hover: hover) and (pointer: fine) { html, body { -webkit-user-select: text; user-select: text; } }
         </style>
