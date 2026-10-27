@@ -12,9 +12,9 @@ import { PullToRefresh } from '../../../features/chat/PullToRefresh';
 import { IncognitoBar, IncognitoGone, IncognitoStartSheet } from '../../../features/chat/Incognito';
 import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/chat/UnknownContact';
 import { VideoModal } from '../../../features/chat/VideoPlayer';
-import { ConversationState, Message, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
+import { ConversationState, Message, fetchMemberReads, getProfiles, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
-import { broadcastOptOut } from '../../../lib/biz';
+import { broadcastOptOut, businessCallTargets } from '../../../lib/biz';
 import { PollSheet } from '../../../features/chat/PollSheet';
 import { PollData, closePoll, disappearingFor, getPolls, setDisappearing, votePoll } from '../../../lib/api';
 import { dayLabel } from '../../../lib/format';
@@ -180,6 +180,26 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
     else setMenu(true);
   };
 
+  const callable = call.supported && !!chat && !blocked && !incognito && (chat.kind === 'group' || (chat.kind === 'direct' && !!chat.peer_id) || (chat.kind === 'business' && (chat.perspective === 'agent' ? !!chat.peer_id : true)));
+  /** One button for every kind of chat: 1:1, group (everyone in the room rings) and business (customer rings the front desk). */
+  const startChatCall = async (kind: 'audio' | 'video') => {
+    if (!chat) return;
+    try {
+      if (chat.kind === 'group') {
+        const ids = (await fetchMemberReads(id)).map((m) => m.user_id).filter((u) => u !== me);
+        const rows = await getProfiles(ids);
+        if (!rows.length) return toast.show(t('No hay nadie más en el grupo.'), 'info');
+        await call.startCall(rows.map((r) => ({ id: r.id, name: r.display_name, avatar: r.avatar_path })), kind, { conversationId: id, title: chatTitle(chat) });
+      } else if (chat.kind === 'business' && chat.perspective !== 'agent') {
+        const targets = await businessCallTargets(id);
+        if (!targets.length) return toast.show(t('Nadie del equipo está disponible para llamadas ahora.'), 'info');
+        await call.startCall(targets.map((r) => ({ id: r.user_id, name: r.display_name, avatar: r.avatar_path })), kind, { conversationId: id, answerOnce: true, title: chatTitle(chat) });
+      } else if (chat.peer_id) {
+        await call.startCall({ id: chat.peer_id, name: chatTitle(chat), avatar: chat.peer_avatar }, kind, { conversationId: id });
+      }
+    } catch (e) { toast.show(friendly(e), 'error'); }
+  };
+
   const header = (
     <View style={{ paddingTop: insets.top + 6, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border, zIndex: 10, position: 'relative' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingBottom: 8, minHeight: 56 }}>
@@ -196,10 +216,10 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stateMeta[chat.state].color }} /><Txt v="caption">{stateMeta[chat.state].label}</Txt>
           </Pressy>
         )}
-        {call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && !incognito && (
+        {callable && (
           <>
-            <IconButton icon="call-outline" label="Llamada de voz" wiggle onPress={() => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, 'audio')} />
-            <IconButton icon="videocam-outline" label="Videollamada" pop onPress={() => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, 'video')} />
+            <IconButton icon="call-outline" label="Llamada de voz" wiggle onPress={() => startChatCall('audio')} />
+            <IconButton icon="videocam-outline" label="Videollamada" pop onPress={() => startChatCall('video')} />
           </>
         )}
         {agent && <IconButton icon="person-add-outline" label="Asignar" onPress={() => setAssignPicker(true)} badge={!chat?.assigned_to} />}

@@ -4,7 +4,8 @@ import { RefreshControl, ScrollView, View, useWindowDimensions } from 'react-nat
 import { BizHeader, Key, NoBusiness, Pill } from '../../components/BizUi';
 import { PersonSearch } from '../../components/PersonSearch';
 import { PersonCard, getProfiles } from '../../lib/api';
-import { Customer, Stage, Task, addCustomer, addCustomerFromUser, addDays, addTask, crmSync, deleteCustomer, deleteTask, listCustomers, listTasks, setTaskDone, stages, startCustomerChat, startOfDay, updateCustomer } from '../../lib/biz';
+import { Customer, Stage, Task, addCustomer, addCustomerFromUser, addDays, addTask, crmSync, deleteCustomer, deleteTask, listCustomers, listTasks, setTaskDone, stages, startCustomerChat, startNegotiation, startOfDay, updateCustomer } from '../../lib/biz';
+import { useCall } from '../../features/calls/CallProvider';
 import { friendly } from '../../lib/errors';
 import { WIDE } from '../../lib/layout';
 import { useChats } from '../../state/ChatsProvider';
@@ -23,6 +24,7 @@ export default function Clients() {
   const { c, r } = useTheme();
   const { active } = useSpace();
   const { chats } = useChats();
+  const call = useCall();
   const toast = useToast();
   const { width } = useWindowDimensions();
   const wide = width >= WIDE;
@@ -58,6 +60,16 @@ export default function Clients() {
     updateCustomer(cu.id, p as never).catch((e) => { toast.show(friendly(e), 'error'); load(); });
   };
   const chatFor = (cu: Customer) => chats.find((ch) => ch.peer_id && ch.peer_id === cu.user_id);
+  const ring = async (cu: Customer, kind: 'audio' | 'video') => {
+    if (!cu.user_id) return;
+    setSel(null);
+    await call.startCall({ id: cu.user_id, name: cu.name, avatar: avatarOf(cu) }, kind, { conversationId: chatFor(cu)?.id });
+  };
+  /** Group room with the customer (files, polls, group calls with screen sharing); reuses the one that already exists. */
+  const negotiate = async (cu: Customer) => {
+    if (!bid) return;
+    try { const id = await startNegotiation(bid, cu.id); setSel(null); router.push({ pathname: '/chat/[id]', params: { id } }); } catch (e) { toast.show(friendly(e), 'error'); }
+  };
   const openTasks = tasks.filter((t) => !t.done);
   /** "Escribir": opens the existing business chat or creates it (also when only the phone was known and that number is on CIFRA). */
   const write = async (cu: Customer) => {
@@ -179,6 +191,9 @@ export default function Clients() {
             <DraftField key={`n-${sel.id}`} label="Notas privadas" initial={sel.notes ?? ''} editable={canWrite} multiline placeholder="Preferencias, acuerdos, lo que no quieras olvidar" maxLength={1000} onCommit={(t) => patch(sel, { notes: t.trim() || null })} />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {canChat(sel) ? <Key primary icon="chatbubble" label={chatFor(sel) ? 'Abrir chat' : 'Escribir'} onPress={() => write(sel)} /> : <Txt v="caption" tone="faint" style={{ alignSelf: 'center' }}>Añade su teléfono para poder escribirle</Txt>}
+              {call.supported && sel.user_id && canWrite && <Key icon="call" label="Llamar" onPress={() => ring(sel, 'audio')} />}
+              {call.supported && sel.user_id && canWrite && <Key icon="videocam" label="Videollamada" onPress={() => ring(sel, 'video')} />}
+              {sel.user_id && canWrite && <Key icon="people" label="Sala de negociación" onPress={() => negotiate(sel)} />}
               <Key icon="calendar" label="Agendar cita" onPress={() => { setSel(null); router.push({ pathname: '/agenda', params: { customer: sel.id } }); }} />
               {canWrite && <Key icon="checkbox" label="Tarea" onPress={async () => { try { const t = await addTask(bid!, { title: T('Seguimiento: {name}', { name: sel.name }), customer_id: sel.id, due_at: addDays(startOfDay(new Date()), 2).toISOString() }); setTasks((cur) => [t, ...cur]); toast.show('Tarea creada para dentro de 2 días', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />}
               {active.role !== 'agent' && active.role !== 'viewer' && <Key icon="trash" label="Eliminar" onPress={async () => { const id = sel.id; setSel(null); try { await deleteCustomer(id); setRows((cur) => cur?.filter((x) => x.id !== id) ?? cur); } catch (e) { toast.show(friendly(e), 'error'); } }} />}

@@ -58,6 +58,9 @@ npm run build:web              # genera dist/ para Netlify
 - La app web solo suena **con la app abierta**. Para recibir llamadas con la app cerrada hacen falta notificaciones push nativas (apps iOS/Android).
 - Mensajes de voz y llamadas funcionan hoy en la versión web/PWA; la versión nativa necesitará `react-native-webrtc`/`expo-audio`.
 
+### Llamadas de grupo, Business y compartir pantalla
+Hasta 6 personas en malla (cada una conectada con cada una). Desde el chat de un grupo suena a todos; en Business, el cliente llama al equipo (suena al agente asignado o a todo el equipo, y el primero que contesta se la queda) y el equipo llama desde la ficha del cliente (**Llamar / Videollamada**). En escritorio hay **Compartir pantalla** (en móvil el navegador no lo permite). **Sala de negociación** (ficha del cliente): grupo con el cliente y quien quieras del equipo, con archivos, encuestas y llamadas. Requiere la migración `20261107_000020`. Prueba de la malla en Chromium real: `CHROMIUM=/opt/pw-browsers/chromium node scripts/test-mesh.mjs`.
+
 ## Dos espacios, dos diseños
 - **Personal («Aurora»)**: violeta eléctrico, modo oscuro negro real, avatares «squircle», burbujas con degradado, barra inferior flotante, títulos en Bricolage Grotesque y 4 fondos de chat propios (Cifra, Aurora, Trama, Noche) o tu imagen.
 - **Business («Ink & Amber»)**: esquinas rectas, mensajes en filas tipo Slack, barra lateral de trabajo, ámbar sobre negro. Incluye **Agenda de citas** (calendario, solicitudes de clientes desde el perfil público, tarjetas en el chat con Confirmar/Cancelar), **Clientes (CRM)** con embudo, etiquetas, notas y tareas, y **Doer**, el asistente que ejecuta tareas (plan → «Hacerlo»). Migración 8; Doer usa `netlify/functions/doer.mts` (`npm run test:doer`, `npm run test:assistant-fn`).
@@ -93,7 +96,7 @@ Bot oficial dentro de la app (fila fija arriba en *Chats*, también en *Nuevo ch
 - **Los mensajes NO tienen cifrado de extremo a extremo.** Viajan por TLS y se guardan cifrados en reposo; el servicio puede técnicamente leerlos. La app lo dice así.
 
 ## Pendiente (hoja de ruta)
-Llamadas de grupo, notificaciones push nativas (y llamadas con la app cerrada), verificación SMS en producción, E2EE, borrado/exportación de cuenta automática, apps de iOS/Android publicadas (EAS).
+Notificaciones push nativas (y llamadas con la app cerrada), verificación SMS en producción, E2EE, borrado/exportación de cuenta automática, apps de iOS/Android publicadas (EAS).
 
 ## Languages
 
