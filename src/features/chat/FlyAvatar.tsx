@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Animated, Easing, Platform, View } from 'react-native';
+import { Animated, Platform, View } from 'react-native';
 import { takeSharedAvatar, useReducedMotion } from '../../lib/motion';
 
 /** Wraps the chat-header avatar: when the chat was opened from an inbox row, the avatar glides from where that row's avatar was to its place (a short shared-element transition). */
