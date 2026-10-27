@@ -1,5 +1,9 @@
 import { router } from 'expo-router';
-import { Platform, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Platform, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { recentSpaceSwitch, setSharedAvatar, useReducedMotion } from '../lib/motion';
+import { useChats } from '../state/ChatsProvider';
 import { Chat, ConversationState } from '../lib/api';
 import { listTime } from '../lib/format';
 import { formatPhone } from '../lib/phone';
@@ -8,6 +12,10 @@ import { useTheme } from '../theme/ThemeProvider';
 import { Avatar, Badge, Icon, Pressy, Txt } from '../ui';
 import { t, tr } from '../i18n';
 
+
+const nat = Platform.OS !== 'web';
+/** Glow already played for this message (a row that remounts while scrolling must not replay it). */
+const glowPlayed = new Set<string>();
 
 export const stateMeta: Record<ConversationState, { label: string; color: string }> = {
   open: { label: 'Abierto', color: '#1FA67A' },
@@ -49,19 +57,57 @@ export function ChatRow({ chat, selected, showState, onMenu, typing }: { chat: C
   const hasUnread = chat.unread > 0 || chat.marked_unread;
   const agentView = chat.perspective === 'agent';
   const st = stateMeta[chat.state];
+  const { newContacts } = useChats();
+  const reduced = useReducedMotion();
+  const newAt = newContacts[chat.id];
+  const isNew = !!newAt;
+  const glow = useRef(new Animated.Value(0)).current;
+  const sweep = useRef(new Animated.Value(0)).current;
+  const [rowW, setRowW] = useState(0);
+  // Someone not in my contacts just wrote: one soft lilac pulse around the whole card, then back to normal.
+  useEffect(() => {
+    if (!newAt || reduced) return;
+    const k = `${chat.id}:${newAt}`;
+    if (glowPlayed.has(k) || Date.now() - newAt > 4000) return;
+    glowPlayed.add(k);
+    glow.setValue(0); sweep.setValue(0);
+    Animated.parallel([
+      Animated.sequence([Animated.timing(glow, { toValue: 1, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: nat }), Animated.delay(900), Animated.timing(glow, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: nat })]),
+      Animated.timing(sweep, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: nat }),
+    ]).start();
+  }, [newAt, reduced, chat.id, glow, sweep]);
+  // First paint after Personal ⇄ Business: the rows slide in from the side the new space lives on. Scrolling never triggers it.
+  const enterRef = useRef(!reduced ? recentSpaceSwitch() : null);
+  const enter = useRef(new Animated.Value(enterRef.current ? 0 : 1)).current;
+  useEffect(() => { if (enterRef.current) Animated.timing(enter, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: nat }).start(); }, [enter]);
+  const avatarRef = useRef<View>(null);
+  const open = () => {
+    if (!reduced) avatarRef.current?.measureInWindow?.((x, y, w) => { if (w > 0) setSharedAvatar(chat.id, x, y, w); });
+    router.push({ pathname: '/chat/[id]', params: { id: chat.id } });
+  };
   return (
+    <Animated.View onLayout={(e) => setRowW(e.nativeEvent.layout.width)} style={{ opacity: enter, transform: [{ translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [(enterRef.current?.dir ?? 0) * 28, 0] }) }] }}>
+    {isNew && !reduced && (
+      <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 6, right: 6, top: 2, bottom: 2, borderRadius: 16, overflow: 'hidden', opacity: glow, borderWidth: 1.5, borderColor: c.accent, backgroundColor: c.accentSoft, shadowColor: c.accent, shadowOpacity: 0.45, shadowRadius: 14 }}>
+        <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, width: 140, transform: [{ translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-140, Math.max(rowW, 320)] }) }] }}>
+          <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
+        </Animated.View>
+      </Animated.View>
+    )}
     <Pressy
-      onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })} onLongPress={() => onMenu?.(chat)} delayLongPress={380} scale={0.985} hoverStyle={{ backgroundColor: c.surfaceAlt }}
+      onPress={open} onLongPress={() => onMenu?.(chat)} delayLongPress={380} scale={0.985} hoverStyle={{ backgroundColor: c.surfaceAlt }}
       {...(Platform.OS === 'web' && onMenu ? ({ onContextMenu: (e: { preventDefault: () => void }) => { e.preventDefault(); onMenu(chat); } } as object) : {})}
-      accessibilityRole="button" accessibilityLabel={`${chatTitle(chat)}. ${previewText(chat, user?.id)}. ${hasUnread ? t('{n} sin leer', { n: chat.unread }) : ''}`}
+      accessibilityRole="button" accessibilityLabel={`${chatTitle(chat)}. ${isNew ? t('Contacto nuevo') + '. ' : ''}${previewText(chat, user?.id)}. ${hasUnread ? t('{n} sin leer', { n: chat.unread }) : ''}`}
       style={{ flexDirection: 'row', alignItems: 'center', gap: biz ? 12 : 14, paddingHorizontal: 16, paddingVertical: biz ? 9 : 12, backgroundColor: selected ? c.accentSoft : 'transparent', borderBottomWidth: biz ? 1 : 0, borderBottomColor: c.border }}
     >
       {biz && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: selected ? c.highlight : st.color }} />}
-      <Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={biz ? 42 : 52} group={chat.kind === 'group'} business={chat.kind === 'business' && !agentView} />
+      <View ref={avatarRef} collapsable={false}><Avatar name={chatTitle(chat)} seed={chat.peer_id ?? chat.id} path={chat.peer_avatar} size={biz ? 42 : 52} group={chat.kind === 'group'} business={chat.kind === 'business' && !agentView} /></View>
       <View style={{ flex: 1, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {chat.incognito && <Icon name="glasses" size={16} tone="muted" />}
-          <Txt v="bodyStrong" numberOfLines={1} style={{ flex: 1, fontFamily: chat.incognito ? 'SpecialElite_400Regular' : hasUnread ? 'Inter_700Bold' : 'Inter_600SemiBold' }}>{chatTitle(chat)}</Txt>
+          <Txt v="bodyStrong" numberOfLines={1} style={{ flexShrink: 1, fontFamily: chat.incognito ? 'SpecialElite_400Regular' : hasUnread ? 'Inter_700Bold' : 'Inter_600SemiBold' }}>{chatTitle(chat)}</Txt>
+          {isNew && <View style={{ paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: c.accentSoft, borderWidth: 1, borderColor: c.accent, justifyContent: 'center' }}><Txt v="caption" style={{ color: c.accentSoftText, fontFamily: 'Inter_600SemiBold' }}>{t('Contacto nuevo')}</Txt></View>}
+          <View style={{ flex: 1 }} />
           {chat.incognito && incognitoLeft(chat) && <Txt v="mono" tone="faint">⏳ {incognitoLeft(chat)}</Txt>}
           {chat.pinned_at && <Icon name="pin" size={12} tone="faint" />}
           <Txt v="mono" tone={hasUnread ? 'accent' : 'faint'}>{listTime(chat.last_at ?? chat.created_at)}</Txt>
@@ -81,5 +127,6 @@ export function ChatRow({ chat, selected, showState, onMenu, typing }: { chat: C
         )}
       </View>
     </Pressy>
+    </Animated.View>
   );
 }

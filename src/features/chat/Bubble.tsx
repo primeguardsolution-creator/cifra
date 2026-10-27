@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Image, Linking, PanResponder, Platform, View } from 'react-native';
+import { prefersReducedMotion, useReducedMotion } from '../../lib/motion';
 import { hapticSoft, hapticSuccess } from '../../lib/haptics';
 import { Message, PollData, Reaction } from '../../lib/api';
 import { bytes, messageTime } from '../../lib/format';
@@ -82,9 +83,15 @@ function BubbleBase(p: BubbleProps) {
   const latest = useRef(p); latest.current = p;
   const dx = useRef(new Animated.Value(0)).current;
   const heart = useRef(new Animated.Value(0)).current;
-  const enter = useRef(new Animated.Value(Date.now() - new Date(m.created_at).getTime() < 4000 ? 0 : 1)).current;
+  const reduced = useReducedMotion();
+  // A message that was just written / just arrived lifts in and settles; history and reduced-motion users get it in place.
+  const enter = useRef(new Animated.Value(!prefersReducedMotion() && Date.now() - new Date(m.created_at).getTime() < 4000 ? 0 : 1)).current;
   const lastTap = useRef(0);
-  useEffect(() => { if ((enter as unknown as { _value: number })._value < 1) Animated.spring(enter, { toValue: 1, useNativeDriver: native, speed: 16, bounciness: 9 }).start(); }, [enter, native]);
+  useEffect(() => {
+    if ((enter as unknown as { _value: number })._value >= 1) return;
+    if (reduced) { enter.setValue(1); return; }
+    Animated.timing(enter, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
+  }, [enter, native, reduced]);
   const pan = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dx > 14 && g.dx > Math.abs(g.dy) * 2 && !latest.current.m.deleted_at && !latest.current.m.pending,
     onPanResponderMove: (_, g) => dx.setValue(Math.min(84, g.dx * 0.6)),
@@ -176,7 +183,7 @@ function BubbleBase(p: BubbleProps) {
   }
 
   return (
-    <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})} style={{ paddingHorizontal: 12, marginTop: p.joinedOlder ? 2 : 10, alignItems: mine ? 'flex-end' : 'flex-start', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }}>
+    <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})} style={{ paddingHorizontal: 12, marginTop: p.joinedOlder ? 2 : 10, alignItems: mine ? 'flex-end' : 'flex-start', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 12 : 8, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 0.97 : 0.985, 1] }) }] }}>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: -2, top: '50%', marginTop: -16, width: 32, height: 32, borderRadius: 16, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center', opacity: dx.interpolate({ inputRange: [0, 40], outputRange: [0, 1], extrapolate: 'clamp' }), transform: [{ scale: dx.interpolate({ inputRange: [0, 40], outputRange: [0.4, 1], extrapolate: 'clamp' }) }, { translateX: -34 }] }}>
         <Icon name="arrow-undo" size={17} color={c.accentSoftText} />
       </Animated.View>

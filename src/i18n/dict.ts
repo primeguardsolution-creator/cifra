@@ -1394,4 +1394,7 @@ export const rows: [string, string, string][] = [
   ["No se pudo compartir la pantalla.", "Could not share the screen.", "Bildschirm konnte nicht geteilt werden."],
   ["Última actualización", "Last updated", "Zuletzt aktualisiert"],
   ["Para hacer esto verifica tu correo en Ajustes → Seguridad de la cuenta.", "To do this, verify your e-mail in Settings → Account security.", "Dafür bestätige bitte deine E-Mail unter Einstellungen → Kontosicherheit."],
+  ["Contacto nuevo", "New contact", "Neuer Kontakt"],
+  ["Mensaje nuevo de {name}, que no está en tus contactos", "New message from {name}, who is not in your contacts", "Neue Nachricht von {name}, der/die nicht in deinen Kontakten ist"],
+  ["un número nuevo", "a new number", "eine neue Nummer"],
 ];

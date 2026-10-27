@@ -5,6 +5,7 @@ import { Animated, Platform } from 'react-native';
 import { BusinessMembership, myBusinesses } from '../lib/api';
 import { useTheme } from '../theme/ThemeProvider';
 import { Space, legacyBizAccent } from '../theme/tokens';
+import { markSpaceSwitch } from '../lib/motion';
 import { SpaceTransition } from '../components/SpaceTransition';
 import { useAuth } from './AuthProvider';
 
@@ -48,6 +49,7 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
     const native = Platform.OS !== 'web';
     setOverlay(target);
     Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: native }).start(() => {
+      markSpaceSwitch(target);
       setSpace(target);
       router.replace(target === 'business' ? '/inbox' : '/chats');
       setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 320, useNativeDriver: native }).start(() => setOverlay(null)), 750);
