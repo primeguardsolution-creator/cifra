@@ -63,8 +63,8 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
   const startWidth = Math.max(88, origin.width);
   const startHeight = Math.max(32, origin.height);
   const diagonal = Math.hypot(width, height);
-  const waveWidth = diagonal * 3.4;
-  const waveHeight = diagonal * 3.4;
+  const waveWidth = diagonal * 4.2;
+  const waveHeight = diagonal * 2.8;
   const angle = business ? -34 : 34;
   const waveColors = business
     ? [personalAccent, '#C5B7FF', '#F8F6FC', '#E9F2EC', '#8AC4A7', businessAccent] as const
@@ -102,10 +102,6 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.74)',
         backgroundColor: targetAccent,
-        shadowColor: targetAccent,
-        shadowOpacity: 0.3,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 0 },
         transform: [
           { scaleX },
           { scaleY },
