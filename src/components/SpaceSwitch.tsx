@@ -82,13 +82,23 @@ export function SpaceSwitchRail() {
   const { c, space } = useTheme();
   const { switchSpace } = useSpace();
   const { unread } = useChats();
+  const railRef = useRef<View>(null);
+  const selectRailSpace = (next: Space) => {
+    if (next === space) { switchSpace(next); return; }
+    const node = railRef.current;
+    if (!node?.measureInWindow) { switchSpace(next); return; }
+    node.measureInWindow((x, y) => {
+      setSpaceTransitionOrigin(x + 28, y + (next === 'business' ? 82 : 28), 48, 48);
+      switchSpace(next);
+    });
+  };
   return (
-    <View style={{ gap: 6, padding: 4, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.07)' }}>
+    <View ref={railRef} collapsable={false} style={{ gap: 6, padding: 4, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.07)' }}>
       {options.map((o) => {
         const active = o.key === space;
         const other = !active ? (o.key === 'business' ? unread.business : unread.personal) : 0;
         return (
-          <Pressy key={o.key} onPress={() => switchSpace(o.key)} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={t('Espacio {name}', { name: tr(o.label) })} scale={0.92}
+          <Pressy key={o.key} onPress={() => selectRailSpace(o.key)} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={t('Espacio {name}', { name: tr(o.label) })} scale={0.92}
             style={{ width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? c.accent : 'transparent' }}>
             <Icon name={o.icon} size={22} color={active ? c.accentText : c.railText} />
             {other > 0 && <View style={{ position: 'absolute', top: 6, right: 6, width: 10, height: 10, borderRadius: 5, backgroundColor: c.highlight }} />}
