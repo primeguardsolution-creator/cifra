@@ -18,32 +18,39 @@ export function SpaceSwitch() {
   const { c, space } = useTheme();
   const reducedMotion = useReducedMotion();
   const { switchSpace } = useSpace();
+  const [pendingSpace, setPendingSpace] = useState<Space | null>(null);
+  const shownSpace = pendingSpace ?? space;
   const { unread } = useChats();
   const [w, setW] = useState(0);
   const switchRef = useRef<View>(null);
   const x = useRef(new Animated.Value(space === 'personal' ? 0 : 1)).current;
   const stretch = useRef(new Animated.Value(1)).current;
-  const previousSpace = useRef(space);
+  const previousSpace = useRef(shownSpace);
   useEffect(() => {
-    if (previousSpace.current === space) return;
-    previousSpace.current = space;
-    if (reducedMotion) { x.setValue(space === 'personal' ? 0 : 1); stretch.setValue(1); return; }
+    if (previousSpace.current === shownSpace) return;
+    previousSpace.current = shownSpace;
+    if (reducedMotion) { x.setValue(shownSpace === 'personal' ? 0 : 1); stretch.setValue(1); return; }
     Animated.parallel([
-      Animated.spring(x, { toValue: space === 'personal' ? 0 : 1, useNativeDriver: Platform.OS !== 'web', damping: 19, stiffness: 190, mass: 0.82 }),
+      Animated.spring(x, { toValue: shownSpace === 'personal' ? 0 : 1, useNativeDriver: Platform.OS !== 'web', damping: 19, stiffness: 190, mass: 0.82 }),
       Animated.sequence([
         Animated.timing(stretch, { toValue: 1.055, duration: 130, useNativeDriver: Platform.OS !== 'web' }),
         Animated.spring(stretch, { toValue: 1, useNativeDriver: Platform.OS !== 'web', damping: 17, stiffness: 230, mass: 0.7 }),
       ]),
     ]).start();
-  }, [space, x, stretch, reducedMotion]);
+  }, [shownSpace, x, stretch, reducedMotion]);
   const seg = w > 0 ? (w - 8) / 2 : 0;
+  useEffect(() => {
+    if (pendingSpace && pendingSpace === space) setPendingSpace(null);
+  }, [space, pendingSpace]);
   const selectSpace = (next: Space) => {
-    if (next === space) { switchSpace(next); return; }
+    if (next === space || next === pendingSpace) { switchSpace(next); return; }
+    setPendingSpace(next);
     const node = switchRef.current;
     if (!node?.measureInWindow) { switchSpace(next); return; }
     node.measureInWindow((x, y, width, height) => {
-      const half = width > 0 ? width / 2 : w / 2;
-      setSpaceTransitionOrigin(x + (next === 'business' ? half + 2 : half - 2), y + (height || 46) / 2);
+      const segmentWidth = Math.max(0, ((width || w) - 8) / 2);
+      const segmentCenter = x + 4 + segmentWidth * (next === 'business' ? 1.5 : 0.5);
+      setSpaceTransitionOrigin(segmentCenter, y + (height || 46) / 2, segmentWidth, 38);
       switchSpace(next);
     });
   };
@@ -55,7 +62,7 @@ export function SpaceSwitch() {
         <Animated.View style={{ position: 'absolute', left: 4, top: 4, width: seg, height: 38, borderRadius: 12, backgroundColor: c.accent, transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, seg] }) }, { scaleX: stretch }], shadowColor: c.accent, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }} />
       )}
       {options.map((o) => {
-        const active = o.key === space;
+        const active = o.key === shownSpace;
         const other = !active ? (o.key === 'business' ? unread.business : unread.personal) : 0;
         return (
           <Pressy key={o.key} onPress={() => selectSpace(o.key)} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={t('Espacio {name}', { name: tr(o.label) })} scale={0.97}
