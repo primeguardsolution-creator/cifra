@@ -73,12 +73,13 @@ export function ChatRow({ chat, selected, showState, onMenu, typing, index = 0 }
     glow.setValue(0); sweep.setValue(0);
     Animated.parallel([
       Animated.sequence([
-        Animated.timing(glow, { toValue: 0.78, duration: 340, easing: Easing.out(Easing.cubic), useNativeDriver: nat }),
-        Animated.timing(glow, { toValue: 1, duration: 190, easing: Easing.out(Easing.quad), useNativeDriver: nat }),
-        Animated.delay(520),
-        Animated.timing(glow, { toValue: 0, duration: 1750, easing: Easing.inOut(Easing.quad), useNativeDriver: nat }),
+        Animated.timing(glow, { toValue: 0.72, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: nat }),
+        Animated.delay(320),
+        Animated.timing(glow, { toValue: 0.18, duration: 600, easing: Easing.inOut(Easing.quad), useNativeDriver: nat }),
+        Animated.delay(1300),
+        Animated.timing(glow, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: nat }),
       ]),
-      Animated.timing(sweep, { toValue: 1, duration: 1320, easing: Easing.inOut(Easing.cubic), useNativeDriver: nat }),
+      Animated.timing(sweep, { toValue: 1, duration: 1240, easing: Easing.inOut(Easing.cubic), useNativeDriver: nat }),
     ]).start();
   }, [newAt, reduced, chat.id, glow, sweep]);
   // First paint after Personal ⇄ Business: the rows slide in from the side the new space lives on. Scrolling never triggers it.
@@ -101,7 +102,7 @@ export function ChatRow({ chat, selected, showState, onMenu, typing, index = 0 }
     {isNew && !reduced && (
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 6, right: 6, top: 2, bottom: 2, borderRadius: 16, overflow: 'hidden', opacity: glow, borderWidth: 1.5, borderColor: c.accent, backgroundColor: c.accentSoft, shadowColor: c.accent, shadowOpacity: 0.45, shadowRadius: 14 }}>
         <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, width: 140, transform: [{ translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-140, Math.max(rowW, 320)] }) }] }}>
-          <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
+          <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
         </Animated.View>
       </Animated.View>
     )}
