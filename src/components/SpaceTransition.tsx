@@ -87,6 +87,9 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
   }, [motion, onCovered, onDone, reducedMotion]);
 
   const palette = palettes[to][mode];
+  const washColors = business
+    ? ['rgba(155,134,255,0.18)', 'rgba(31,166,122,0.2)', palette.bg] as const
+    : ['rgba(31,166,122,0.16)', 'rgba(155,134,255,0.22)', palette.bg] as const;
   const targetAccent = business ? BUSINESS : PERSONAL;
   const sourceAccent = business ? PERSONAL : BUSINESS;
   const travel = business ? -1 : 1;
@@ -102,9 +105,7 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
       style={{ position: 'absolute', inset: 0, opacity: motion.out, zIndex: 2000 } as object}>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', inset: 0, opacity: washOpacity } as object}>
         <LinearGradient
-          colors={business
-            ? ['rgba(155,134,255,0.18)', 'rgba(31,166,122,0.2)', palette.bg]
-            : ['rgba(31,166,122,0.16)', 'rgba(155,134,255,0.22)', palette.bg]}
+          colors={washColors}
           locations={[0, 0.52, 1]}
           start={{ x: business ? 1 : 0, y: 0.15 }}
           end={{ x: business ? 0 : 1, y: 0.9 }}
