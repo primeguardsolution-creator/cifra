@@ -1,32 +1,30 @@
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, View, useWindowDimensions } from 'react-native';
-import { Space } from '../theme/tokens';
+import { useReducedMotion, takeSpaceTransitionOrigin } from '../lib/motion';
+import { palettes, Space } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeProvider';
 import { Txt } from '../ui';
 import { t } from '../i18n';
-import { useReducedMotion } from '../lib/motion';
 
 const native = Platform.OS !== 'web';
 const PERSONAL = '#9B86FF';
 const BUSINESS = '#1FA67A';
 
-const timing = (value: Animated.Value, toValue: number, duration: number, easing = Easing.out(Easing.cubic)) =>
-  Animated.timing(value, { toValue, duration, easing, useNativeDriver: native });
-
 /**
- * A directional ribbon moves in from the destination space, then opens into a soft diagonal wave.
- * onCovered changes the space only after the old screen is fully covered; onDone removes the veil.
+ * The destination colour washes through from the tapped space switch. The workspace swaps beneath
+ * the colour veil, then the new screen comes into focus. No layout or space-switch behavior changes.
  */
 export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovered: () => void; onDone: () => void }) {
   const { width, height } = useWindowDimensions();
+  const { mode } = useTheme();
   const reducedMotion = useReducedMotion();
   const business = to === 'business';
+  const originRef = useRef(takeSpaceTransitionOrigin());
+  const origin = originRef.current ?? { x: width / 2, y: height * 0.14 };
   const [motion] = useState(() => ({
-    veil: new Animated.Value(0),
-    mark: new Animated.Value(0),
-    ribbonIn: new Animated.Value(0),
-    wave: new Animated.Value(0),
+    wash: new Animated.Value(0),
+    sweep: new Animated.Value(0),
     label: new Animated.Value(0),
     out: new Animated.Value(1),
   }));
@@ -34,16 +32,36 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
 
   useEffect(() => {
     let live = true;
-    const enterDuration = reducedMotion ? 120 : 260;
-    const revealDuration = reducedMotion ? 1 : 540;
-    Animated.sequence([
-      Animated.parallel([
-        timing(motion.veil, 1, reducedMotion ? 100 : 220, Easing.out(Easing.quad)),
-        timing(motion.mark, 1, reducedMotion ? 100 : 220, Easing.out(Easing.back(1.35))),
-        timing(motion.label, 1, enterDuration),
-        timing(motion.ribbonIn, 1, reducedMotion ? 1 : 360, Easing.out(Easing.cubic)),
+    const duration = reducedMotion ? 120 : 760;
+    Animated.parallel([
+      Animated.timing(motion.wash, {
+        toValue: 1,
+        duration: reducedMotion ? 100 : 610,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: native,
+      }),
+      Animated.timing(motion.sweep, {
+        toValue: 1,
+        duration,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: native,
+      }),
+      Animated.sequence([
+        Animated.delay(reducedMotion ? 0 : 120),
+        Animated.timing(motion.label, {
+          toValue: 1,
+          duration: reducedMotion ? 80 : 330,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: native,
+        }),
+        Animated.delay(reducedMotion ? 0 : 120),
+        Animated.timing(motion.label, {
+          toValue: 0,
+          duration: reducedMotion ? 20 : 220,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: native,
+        }),
       ]),
-      timing(motion.wave, 1, revealDuration, Easing.inOut(Easing.cubic)),
     ]).start(({ finished }) => {
       if (!finished || !live) return;
       onCovered();
@@ -51,103 +69,95 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
         if (!live) return;
         Animated.timing(motion.out, {
           toValue: 0,
-          duration: reducedMotion ? 120 : 360,
+          duration: reducedMotion ? 100 : 320,
           easing: Easing.out(Easing.quad),
           useNativeDriver: native,
         }).start(({ finished: faded }) => { if (faded && live) onDone(); });
-      }, reducedMotion ? 0 : 100);
+      }, reducedMotion ? 0 : 70);
     });
 
     return () => {
       live = false;
       if (timer.current) clearTimeout(timer.current);
-      motion.veil.stopAnimation();
-      motion.mark.stopAnimation();
-      motion.ribbonIn.stopAnimation();
-      motion.wave.stopAnimation();
+      motion.wash.stopAnimation();
+      motion.sweep.stopAnimation();
       motion.label.stopAnimation();
       motion.out.stopAnimation();
     };
   }, [motion, onCovered, onDone, reducedMotion]);
 
-  const direction = business ? 1 : -1;
-  const diagonal = Math.hypot(width, height);
-  const ribbonWidth = Math.max(diagonal * 2.4, width * 2.4);
-  const ribbonHeight = Math.max(36, Math.min(56, width * 0.12));
-  const expand = motion.wave.interpolate({ inputRange: [0, 1], outputRange: [0.035, (diagonal * 2.4) / ribbonHeight] });
-  const colors = business
-    ? ['#102A23', '#1FA67A', '#C9F4E3', '#1FA67A', '#102A23'] as const
-    : ['#201A46', '#7861E8', '#D8D0FF', '#9B86FF', '#201A46'] as const;
-  const labelOpacity = Animated.multiply(
-    motion.label,
-    motion.wave.interpolate({ inputRange: [0, 0.18], outputRange: [1, 0], extrapolate: 'clamp' }),
-  );
+  const palette = palettes[to][mode];
+  const targetAccent = business ? BUSINESS : PERSONAL;
+  const sourceAccent = business ? PERSONAL : BUSINESS;
+  const travel = business ? -1 : 1;
+  const bandWidth = Math.max(190, width * 0.62);
+  const bandHeight = height * 1.7;
+  const travelDistance = width * 1.28;
+  const washOpacity = motion.wash.interpolate({ inputRange: [0, 0.78, 1], outputRange: [0, 0.66, 0.96] });
+  const sweepOpacity = motion.sweep.interpolate({ inputRange: [0, 0.12, 0.8, 1], outputRange: [0, 0.9, 0.72, 0] });
 
   return (
     <Animated.View pointerEvents="auto" accessibilityViewIsModal accessibilityLiveRegion="polite"
       accessibilityLabel={business ? t('Espacio Business') : t('Espacio Personal')}
       style={{ position: 'absolute', inset: 0, opacity: motion.out, zIndex: 2000 } as object}>
-      <Animated.View pointerEvents="none" style={{ position: 'absolute', inset: 0, opacity: motion.veil } as object}>
-        <BlurView intensity={Platform.OS === 'web' ? 28 : 24} tint="dark"
-          {...(Platform.OS === 'android' ? { blurMethod: 'dimezisBlurViewSdk31Plus' as const } : {})}
-          style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(9,15,13,0.64)' } as object} />
-      </Animated.View>
-
-      <View pointerEvents="none" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <Animated.View pointerEvents="none" style={{ position: 'absolute', inset: 0, opacity: washOpacity } as object}>
+        <LinearGradient
+          colors={business
+            ? ['rgba(155,134,255,0.18)', 'rgba(31,166,122,0.2)', palette.bg]
+            : ['rgba(31,166,122,0.16)', 'rgba(155,134,255,0.22)', palette.bg]}
+          locations={[0, 0.52, 1]}
+          start={{ x: business ? 1 : 0, y: 0.15 }}
+          end={{ x: business ? 0 : 1, y: 0.9 }}
+          style={{ position: 'absolute', inset: 0 }}
+        />
         <Animated.View style={{
           position: 'absolute',
-          width: ribbonWidth,
-          height: ribbonHeight,
-          left: (width - ribbonWidth) / 2,
-          top: (height - ribbonHeight) / 2,
-          borderRadius: ribbonHeight / 2,
-          overflow: 'hidden',
-          opacity: motion.ribbonIn.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 1, 1] }),
-          transform: [
-            { translateX: motion.ribbonIn.interpolate({ inputRange: [0, 1], outputRange: [direction * width * 0.42, 0] }) },
-            { rotate: business ? '-18deg' : '18deg' },
-            { scaleY: expand },
-          ],
-        } as object}>
-          <LinearGradient colors={colors} locations={[0, 0.23, 0.5, 0.77, 1]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
-          <Animated.View style={{
-            position: 'absolute', top: 0, bottom: 0, width: 140,
-            opacity: motion.wave.interpolate({ inputRange: [0, 0.24, 0.7], outputRange: [0, 0.75, 0], extrapolate: 'clamp' }),
-            transform: [{ translateX: motion.wave.interpolate({ inputRange: [0, 1], outputRange: [-140, ribbonWidth] }) }],
-          } as object}>
-            <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.48)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
-          </Animated.View>
-        </Animated.View>
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          opacity: motion.wash.interpolate({ inputRange: [0, 0.38, 1], outputRange: [0, 0.36, 0.12] }),
+          backgroundColor: targetAccent,
+        }} />
+      </Animated.View>
 
-        <Animated.View style={{
-          width: 66, height: 66, alignItems: 'center', justifyContent: 'center',
-          opacity: motion.mark.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-          transform: [{ scale: motion.mark.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }) }],
-        }}>
-          <View style={{
-            width: 58, height: 58, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
-            backgroundColor: business ? 'rgba(31,166,122,0.2)' : 'rgba(155,134,255,0.2)',
-            borderWidth: 1, borderColor: business ? 'rgba(143,231,195,0.4)' : 'rgba(211,202,255,0.45)',
-            shadowColor: business ? BUSINESS : PERSONAL, shadowOpacity: 0.7, shadowRadius: 22, shadowOffset: { width: 0, height: 0 },
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              {[0, 1, 2].map((i) => <View key={i} style={{
-                width: i === 1 ? 8 : 6, height: i === 1 ? 8 : 6, borderRadius: 5,
-                backgroundColor: business ? (i === 1 ? '#D5F8E8' : BUSINESS) : (i === 1 ? '#F2EEFF' : PERSONAL),
-              }} />)}
-            </View>
-          </View>
-        </Animated.View>
+      <Animated.View pointerEvents="none" style={{
+        position: 'absolute',
+        left: origin.x - bandWidth / 2,
+        top: origin.y - bandHeight / 2,
+        width: bandWidth,
+        height: bandHeight,
+        borderRadius: bandWidth / 2,
+        overflow: 'hidden',
+        opacity: sweepOpacity,
+        transform: [
+          { translateX: motion.sweep.interpolate({ inputRange: [0, 1], outputRange: [0, travel * travelDistance] }) },
+          { rotate: business ? '-11deg' : '11deg' },
+          { scaleX: motion.sweep.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0.64, 1.08, 0.9] }) },
+        ],
+      } as object}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.5)', `${targetAccent}55`, 'rgba(255,255,255,0.18)', 'rgba(255,255,255,0)']}
+          locations={[0, 0.3, 0.52, 0.68, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ flex: 1 }}
+        />
+      </Animated.View>
 
-        <Animated.View style={{
-          position: 'absolute', top: '50%', marginTop: 60, alignItems: 'center', gap: 5,
-          opacity: labelOpacity,
-          transform: [{ translateY: motion.label.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
-        }}>
-          <Txt v="h2" style={{ color: '#fff' }}>{business ? t('Espacio Business') : t('Espacio Personal')}</Txt>
-          <Txt v="small" style={{ color: 'rgba(255,255,255,0.78)' }}>{business ? t('Bandeja, agenda, clientes y Doer') : t('Tus conversaciones privadas')}</Txt>
-        </Animated.View>
-      </View>
+      <Animated.View pointerEvents="none" style={{
+        position: 'absolute',
+        top: '50%',
+        left: 20,
+        right: 20,
+        alignItems: 'center',
+        gap: 5,
+        opacity: motion.label,
+        transform: [{ translateY: motion.label.interpolate({ inputRange: [0, 1], outputRange: [9, 0] }) }],
+      }}>
+        <Txt v="h2" style={{ color: palette.text }}>{business ? t('Espacio Business') : t('Espacio Personal')}</Txt>
+        <Txt v="small" style={{ color: palette.textMuted }}>{business ? t('Bandeja, agenda, clientes y Doer') : t('Tus conversaciones privadas')}</Txt>
+      </Animated.View>
     </Animated.View>
   );
 }
