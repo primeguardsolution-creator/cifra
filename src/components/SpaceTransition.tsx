@@ -91,7 +91,6 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
     ? ['rgba(155,134,255,0.18)', 'rgba(31,166,122,0.2)', palette.bg] as const
     : ['rgba(31,166,122,0.16)', 'rgba(155,134,255,0.22)', palette.bg] as const;
   const targetAccent = business ? BUSINESS : PERSONAL;
-  const sourceAccent = business ? PERSONAL : BUSINESS;
   const travel = business ? -1 : 1;
   const bandWidth = Math.max(190, width * 0.62);
   const bandHeight = height * 1.7;
