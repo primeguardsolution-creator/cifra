@@ -34,3 +34,12 @@ export const recentSpaceSwitch = () => (Date.now() - switched.at < 900 ? switche
 let shared: { conv: string; x: number; y: number; size: number; at: number } | null = null;
 export const setSharedAvatar = (conv: string, x: number, y: number, size: number) => { shared = { conv, x, y, size, at: Date.now() }; };
 export const takeSharedAvatar = (conv: string) => { const s = shared; shared = null; return s && s.conv === conv && Date.now() - s.at < 1500 ? s : null; };
+
+/** Space-mode transition origin: the switch pill, so the color wash grows from the control. */
+let spaceTransitionOrigin: { x: number; y: number; width: number; height: number } | null = null;
+export const setSpaceTransitionOrigin = (x: number, y: number, width: number, height: number) => { spaceTransitionOrigin = { x, y, width, height }; };
+export const takeSpaceTransitionOrigin = () => {
+  const origin = spaceTransitionOrigin;
+  spaceTransitionOrigin = null;
+  return origin;
+};
