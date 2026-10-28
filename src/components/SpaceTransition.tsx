@@ -2,8 +2,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, View, useWindowDimensions } from 'react-native';
 import { takeSpaceTransitionOrigin, useReducedMotion } from '../lib/motion';
-import { palettes, Space } from '../theme/tokens';
+import { accentOptions, bizAccentOptions, palettes, Space } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
+import { t } from '../i18n';
 
 const native = Platform.OS !== 'web';
 const PERSONAL = '#9B86FF';
@@ -15,7 +16,7 @@ const BUSINESS = '#0E4B3A';
  */
 export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovered: () => void; onDone: () => void }) {
   const { width, height } = useWindowDimensions();
-  const { mode } = useTheme();
+  const { mode, accent, bizAccent } = useTheme();
   const reducedMotion = useReducedMotion();
   const business = to === 'business';
   const originRef = useRef(takeSpaceTransitionOrigin());
@@ -56,7 +57,9 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
   }, [motion, onCovered, onDone, reducedMotion]);
 
   const palette = palettes[to][mode];
-  const targetAccent = business ? BUSINESS : PERSONAL;
+  const personalAccent = accentOptions.find((option) => option.key === accent)?.swatch ?? PERSONAL;
+  const businessAccent = bizAccentOptions.find((option) => option.key === bizAccent)?.swatch ?? BUSINESS;
+  const targetAccent = business ? businessAccent : personalAccent;
   const startWidth = Math.max(88, origin.width);
   const startHeight = Math.max(32, origin.height);
   const diagonal = Math.hypot(width, height);
@@ -64,8 +67,8 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
   const waveHeight = diagonal * 3.4;
   const angle = business ? -34 : 34;
   const waveColors = business
-    ? [PERSONAL, '#C5B7FF', '#F8F6FC', '#E9F2EC', '#8AC4A7', '#0E4B3A'] as const
-    : [BUSINESS, '#8AC4A7', '#F7F5FB', '#E7E1FF', '#C5B7FF', PERSONAL] as const;
+    ? [personalAccent, '#C5B7FF', '#F8F6FC', '#E9F2EC', '#8AC4A7', businessAccent] as const
+    : [businessAccent, '#8AC4A7', '#F7F5FB', '#E7E1FF', '#C5B7FF', personalAccent] as const;
 
   const scaleX = motion.progress.interpolate({
     inputRange: [0, 0.14, 0.36, 1],
@@ -85,7 +88,7 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
 
   return (
     <Animated.View pointerEvents="auto" accessibilityViewIsModal accessibilityLiveRegion="polite"
-      accessibilityLabel={business ? 'Espacio Business' : 'Espacio Personal'}
+      accessibilityLabel={business ? t('Espacio Business') : t('Espacio Personal')}
       style={{ position: 'absolute', inset: 0, opacity: motion.out, zIndex: 2000 } as object}>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', inset: 0, opacity: recede, backgroundColor: palette.bg } as object} />
       <Animated.View pointerEvents="none" style={{
