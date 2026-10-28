@@ -5,6 +5,7 @@ import { takeSpaceTransitionOrigin, useReducedMotion } from '../lib/motion';
 import { accentOptions, bizAccentOptions, palettes, Space } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { t } from '../i18n';
+import { SpaceHero } from './SpaceHero';
 
 const native = Platform.OS !== 'web';
 const PERSONAL = '#9B86FF';
@@ -118,6 +119,7 @@ export function SpaceTransition({ to, onCovered, onDone }: { to: Space; onCovere
           style={{ flex: 1 }}
         />
       </Animated.View>
+      {!reducedMotion && <SpaceHero to={to} progress={motion.progress} />}
     </Animated.View>
   );
 }
