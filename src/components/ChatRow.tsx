@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Reanimated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { recentSpaceSwitch, setSharedAvatar, useReducedMotion } from '../lib/motion';
 import { useChats } from '../state/ChatsProvider';
 import { Chat, ConversationState } from '../lib/api';
@@ -83,22 +84,18 @@ export function ChatRow({ chat, selected, showState, onMenu, typing, index = 0 }
     ]).start();
   }, [newAt, reduced, chat.id, glow, sweep]);
   // First paint after Personal ⇄ Business: the rows slide in from the side the new space lives on. Scrolling never triggers it.
-  const enterRef = useRef(!reduced ? recentSpaceSwitch() : null);
-  const enter = useRef(new Animated.Value(enterRef.current ? 0 : 1)).current;
-  useEffect(() => {
-    if (!enterRef.current) return;
-    Animated.sequence([
-      Animated.delay(90 + Math.min(index, 7) * 42),
-      Animated.spring(enter, { toValue: 1, useNativeDriver: nat, damping: 20, stiffness: 145, mass: 0.82 }),
-    ]).start();
-  }, [enter, index]);
+  const [entering] = useState(() => {
+    const sw = reduced ? null : recentSpaceSwitch();
+    if (!sw) return undefined;
+    return (sw.dir > 0 ? FadeInRight : FadeInLeft).delay(90 + Math.min(index, 7) * 45).springify().damping(17).stiffness(150).mass(0.8);
+  });
   const avatarRef = useRef<View>(null);
   const open = () => {
     if (!reduced) avatarRef.current?.measureInWindow?.((x, y, w) => { if (w > 0) setSharedAvatar(chat.id, x, y, w); });
     router.push({ pathname: '/chat/[id]', params: { id: chat.id } });
   };
   return (
-    <Animated.View onLayout={(e) => setRowW(e.nativeEvent.layout.width)} style={{ opacity: enter, transform: [{ translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [(enterRef.current?.dir ?? 0) * 28, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) }] }}>
+    <Reanimated.View entering={entering} onLayout={(e) => setRowW(e.nativeEvent.layout.width)}>
     {isNew && !reduced && (
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 6, right: 6, top: 2, bottom: 2, borderRadius: 16, overflow: 'hidden', opacity: glow, borderWidth: 1.5, borderColor: c.accent, backgroundColor: c.accentSoft, shadowColor: c.accent, shadowOpacity: 0.45, shadowRadius: 14 }}>
         <Animated.View style={{ position: 'absolute', top: 0, bottom: 0, width: 140, transform: [{ translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-140, Math.max(rowW, 320)] }) }] }}>
@@ -139,6 +136,6 @@ export function ChatRow({ chat, selected, showState, onMenu, typing, index = 0 }
         )}
       </View>
     </Pressy>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
