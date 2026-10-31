@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Reanimated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { recentSpaceSwitch, setSharedAvatar, useReducedMotion } from '../lib/motion';
 import { useChats } from '../state/ChatsProvider';
 import { Chat, ConversationState } from '../lib/api';
@@ -84,11 +84,7 @@ export function ChatRow({ chat, selected, showState, onMenu, typing, index = 0 }
     ]).start();
   }, [newAt, reduced, chat.id, glow, sweep]);
   // First paint after Personal ⇄ Business: the rows slide in from the side the new space lives on. Scrolling never triggers it.
-  const [entering] = useState(() => {
-    const sw = reduced ? null : recentSpaceSwitch();
-    if (!sw) return undefined;
-    return (sw.dir > 0 ? FadeInRight : FadeInLeft).delay(90 + Math.min(index, 7) * 45).springify().damping(17).stiffness(150).mass(0.8);
-  });
+  const [entering] = useState(() => (reduced || !recentSpaceSwitch() ? undefined : FadeIn.duration(260).delay(160 + Math.min(index, 6) * 35)));
   const avatarRef = useRef<View>(null);
   const open = () => {
     if (!reduced) avatarRef.current?.measureInWindow?.((x, y, w) => { if (w > 0) setSharedAvatar(chat.id, x, y, w); });
