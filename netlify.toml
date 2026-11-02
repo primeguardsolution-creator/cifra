@@ -57,6 +57,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/integrations"
+  to = "/.netlify/functions/integrations"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

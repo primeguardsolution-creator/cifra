@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { IntegrationsCard } from '../../features/integrations/IntegrationsCard';
 import { BillingCard } from '../../features/billing/BillingCard';
 import { PhoneField } from '../../components/PhoneField';
 import { CoverPicker, PhotoPicker } from '../../components/PhotoPicker';
@@ -191,6 +192,8 @@ export default function BusinessHub() {
               ))}
               {manage && <><Divider /><SheetRow icon="add-circle" label="Nueva respuesta rápida" tone="accent" onPress={() => setQrOpen(true)} /></>}
             </Card>
+
+            {manage && biz && <><SectionLabel>Integraciones</SectionLabel><IntegrationsCard businessId={biz.id} /></>}
 
             {manage && biz && <><SectionLabel>Plan</SectionLabel><BillingCard businessId={biz.id} /></>}
 
