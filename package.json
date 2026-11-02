@@ -60,6 +60,7 @@
     "build:web": "sh scripts/build-web.sh",
     "lint": "expo lint",
     "test:integrations": "node --experimental-strip-types --no-warnings scripts/test-integrations.mjs",
+    "test:cards": "node --experimental-strip-types --no-warnings scripts/test-cards.mjs",
     "test:geo": "node --experimental-strip-types --no-warnings scripts/test-geo.mjs"
   },
   "private": true

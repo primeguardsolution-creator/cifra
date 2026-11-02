@@ -8,7 +8,9 @@ import { Picked, pickChatMedia, pickDocument, takePhoto } from '../../lib/media'
 import { MAX_VOICE_MS, VoiceRecorder, clock, voiceSupported } from '../../lib/voice';
 import { useTheme } from '../../theme/ThemeProvider';
 import { font } from '../../theme/tokens';
-import { Icon, IconButton, Pressy, Sheet, SheetRow, Txt, useToast } from '../../ui';
+import { Icon, IconButton, IconName, Pressy, Sheet, SheetRow, Txt, useToast } from '../../ui';
+import Reanimated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import { fileArt } from '../../lib/fileKind';
 import { VideoThumb } from './VideoPlayer';
 import { loc, t, tr } from '../../i18n';
 
@@ -24,6 +26,8 @@ type Props = {
   onSchedule?: (body: string, sendAt: Date, replyTo: string | null, internal: boolean) => Promise<void> | void;
   /** Opens the new-poll sheet (direct chats and groups). */ onPoll?: () => void;
   /** Opens the share-location sheet. */ onLocation?: () => void;
+  /** Opens the send-contact picker. */ onContact?: () => void;
+  /** Opens the event form (direct chats, groups) or the appointment flow (business chats: `eventLabel` is then 'Cita'). */ onEvent?: () => void; eventLabel?: 'Evento' | 'Cita';
 };
 
 export function Composer(p: Props) {
@@ -177,11 +181,33 @@ export function Composer(p: Props) {
           </Pressy>
         </View>
       )}
+      {attach && !p.editing && (() => {
+        const items: { key: string; label: string; art?: number; icon?: IconName; on: () => void }[] = [
+          { key: 'media', label: 'Galería', art: fileArt.image as number, on: () => run(pickChatMedia) },
+          ...(Platform.OS !== 'web' ? [{ key: 'camera', label: 'Cámara', icon: 'camera' as IconName, on: () => run(takePhoto) }] : []),
+          { key: 'doc', label: 'Documento', art: fileArt.doc as number, on: () => run(pickDocument) },
+          ...(p.onLocation ? [{ key: 'loc', label: 'Ubicación', art: fileArt.location as number, on: () => { setAttach(false); p.onLocation?.(); } }] : []),
+          ...(p.onPoll ? [{ key: 'poll', label: 'Encuesta', art: fileArt.poll as number, on: () => { setAttach(false); p.onPoll?.(); } }] : []),
+          ...(p.onContact ? [{ key: 'contact', label: 'Contacto', art: fileArt.contact as number, on: () => { setAttach(false); p.onContact?.(); } }] : []),
+          ...(p.onEvent ? [{ key: 'event', label: p.eventLabel ?? 'Evento', art: fileArt.event as number, on: () => { setAttach(false); p.onEvent?.(); } }] : []),
+        ];
+        const cols = items.length <= 5 ? items.length : 3; // up to 5 in one row, otherwise a grid of 3
+        return (
+          <Reanimated.View entering={FadeInDown.duration(180)} exiting={FadeOutDown.duration(120)} style={{ marginHorizontal: 10, marginTop: 8, padding: 10, borderRadius: r(20), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, flexDirection: 'row', flexWrap: 'wrap', rowGap: 10 }}>
+            {items.map((it) => (
+              <Pressy key={it.key} onPress={it.on} accessibilityRole="button" accessibilityLabel={tr(it.label)} scale={0.92} style={{ width: `${100 / cols}%`, alignItems: 'center', gap: 4 }}>
+                {it.art ? <Image source={it.art} resizeMode="contain" style={{ width: 52, height: 52 }} /> : <View style={{ width: 46, height: 46, margin: 3, borderRadius: 13, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}><Icon name={it.icon!} size={22} color={c.accentText} /></View>}
+                <Txt v="caption" numberOfLines={1} tone="muted" style={{ textAlign: 'center' }}>{it.label}</Txt>
+              </Pressy>
+            ))}
+          </Reanimated.View>
+        );
+      })()}
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 10, paddingTop: 8 }}>
-        {!p.editing && <IconButton icon="add" label="Adjuntar" size={44} tone="accent" onPress={() => setAttach(true)} />}
+        {!p.editing && <IconButton icon={attach ? 'close' : 'add'} label={attach ? 'Cerrar' : 'Adjuntar'} size={44} tone="accent" onPress={() => setAttach((v) => !v)} />}
         <View style={{ flex: 1, minHeight: 46, maxHeight: 140, borderRadius: r(23), backgroundColor: tint, borderWidth: 1.5, borderColor: internal ? c.internalBorder : c.border, paddingHorizontal: 16, justifyContent: 'center' }}>
           <TextInput
-            ref={input} autoFocus={p.autoFocus} value={text} onChangeText={(t) => { setText(t); if (t) p.onTyping(); }} multiline numberOfLines={1} onKeyPress={onKey}
+            ref={input} autoFocus={p.autoFocus} value={text} onChangeText={(t) => { setText(t); if (t) p.onTyping(); if (attach) setAttach(false); }} multiline numberOfLines={1} onKeyPress={onKey}
             onContentSizeChange={(e) => setInputH(Math.min(120, Math.max(24, e.nativeEvent.contentSize.height)))}
             placeholder={tr(internal ? 'Nota solo para tu equipo' : p.editing ? 'Edita tu mensaje' : 'Escribe un mensaje')} placeholderTextColor={c.textFaint} selectionColor={c.accent} accessibilityLabel={tr('Mensaje')}
             style={{ color: c.text, fontFamily: incognito ? font.typewriter : font.regular, fontSize: 16, lineHeight: 22, height: text ? inputH : 24, paddingVertical: 0, marginVertical: 11, outlineStyle: 'none' } as object}
@@ -204,13 +230,6 @@ export function Composer(p: Props) {
         </Animated.View>
       </View>
 
-      <Sheet visible={attach} onClose={() => setAttach(false)} title="Adjuntar">
-        <SheetRow icon="images" label="Foto o vídeo" sub="Desde tu galería" onPress={() => run(pickChatMedia)} />
-        {Platform.OS !== 'web' && <SheetRow icon="camera" label="Cámara" sub="Haz una foto ahora" onPress={() => run(takePhoto)} />}
-        {p.onPoll && <SheetRow icon="stats-chart" label="Encuesta" sub="Una pregunta con 2 a 6 opciones" onPress={() => { setAttach(false); p.onPoll?.(); }} />}
-        {p.onLocation && <SheetRow icon="location" label="Ubicación" sub="Envía dónde estás ahora mismo" onPress={() => { setAttach(false); p.onLocation?.(); }} />}
-        <SheetRow icon="document-text" label="Documento" sub="PDF, texto y más · máx. 25 MB" onPress={() => run(pickDocument)} />
-      </Sheet>
       <Sheet visible={sched} onClose={() => setSched(false)} title="Programar mensaje">
         <Txt v="small" tone="muted" style={{ marginBottom: 6 }}>Se enviará solo a la hora elegida, aunque tengas CIFRA cerrado.</Txt>
         {presets.map((x) => <SheetRow key={x.label} icon="alarm" label={x.label} sub={x.sub} onPress={() => scheduleAt(x.at)} />)}
