@@ -43,4 +43,10 @@ export const fileKindMeta: Record<FileKind, { label: string; icon: IconName; col
  * 3D artwork per kind (transparent WebP in assets/art/files/). Empty until the art exists: cards fall back to a coloured tile with a line icon.
  * To add one: save it as assets/art/files/<kind>.webp and add `pdf: require('../../assets/art/files/pdf.webp')` here.
  */
-export const fileArt: Partial<Record<FileKind | 'location' | 'live-location' | 'contact' | 'event' | 'poll' | 'voice', ImageSourcePropType>> = {};
+export const fileArt: Partial<Record<FileKind | 'location' | 'live-location' | 'contact' | 'event' | 'poll' | 'voice', ImageSourcePropType>> = {
+  doc: require('../../assets/art/files/doc.webp'),
+  video: require('../../assets/art/files/video.webp'),
+  other: require('../../assets/art/files/other.webp'),
+  contact: require('../../assets/art/files/contact.webp'),
+  'live-location': require('../../assets/art/files/live-location.webp'),
+};
