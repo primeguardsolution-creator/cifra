@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, FlatList, Image, Modal, Platform, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Image, Linking, Modal, Platform, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatTitle, stateMeta } from '../../../components/ChatRow';
 import { Wallpaper } from '../../../components/Wallpaper';
@@ -13,6 +13,10 @@ import { IncognitoBar, IncognitoGone, IncognitoStartSheet } from '../../../featu
 import { FlyAvatar } from '../../../features/chat/FlyAvatar';
 import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/chat/UnknownContact';
 import { VideoModal } from '../../../features/chat/VideoPlayer';
+import { DocViewer } from '../../../features/files/DocViewer';
+import { LocationSheet } from '../../../features/location/LocationSheet';
+import { encodeLocation, geoSupported } from '../../../lib/geo';
+import { isViewable } from '../../../lib/fileKind';
 import { ConversationState, Message, fetchMemberReads, getProfiles, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
 import { friendly } from '../../../lib/errors';
 import { broadcastOptOut, businessCallTargets } from '../../../lib/biz';
@@ -83,6 +87,8 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   const [editing, setEditing] = useState<Message | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(null);
+  const [locOpen, setLocOpen] = useState(false);
+  const [doc, setDoc] = useState<{ url: string; name: string; mime: string | null; size: number | null } | null>(null);
   const [menu, setMenu] = useState(false);
   const [statePicker, setStatePicker] = useState(false);
   const [assignPicker, setAssignPicker] = useState(false);
@@ -259,7 +265,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
             slack={agent} slackName={agent ? (m.sender_id === chat?.peer_id ? chat?.peer_name ?? 'Cliente' : m.is_automated ? chat?.business_name ?? 'Negocio (auto)' : nameOf(m.sender_id)) : undefined} authorId={m.sender_id} authorAvatar={agent ? (m.sender_id === chat?.peer_id ? chat?.peer_avatar : conv.people[m.sender_id]?.avatar_path) : undefined} isCustomer={agent && m.sender_id === chat?.peer_id}
             replyTo={m.reply_to_id ? target : undefined} replyAuthor={target ? nameOf(target.sender_id) : undefined}
             reactions={conv.reactions.filter((x) => x.message_id === m.id)}
-            onOpenActions={setActionFor} onOpenImage={setViewer} onOpenVideo={setVideo} onJumpTo={jumpTo} onReply={(x) => { setReplyTo(x); setEditing(null); }} onCallBack={call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && !incognito ? (kind) => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, kind) : undefined}
+            onOpenActions={setActionFor} onOpenImage={setViewer} onOpenVideo={setVideo} onOpenFile={(m, url) => (isViewable(m.attachment_name, m.attachment_type) ? setDoc({ url, name: m.attachment_name ?? 'archivo', mime: m.attachment_type, size: m.attachment_size }) : Linking.openURL(url))} onJumpTo={jumpTo} onReply={(x) => { setReplyTo(x); setEditing(null); }} onCallBack={call.supported && chat?.kind === 'direct' && chat.peer_id && !blocked && !incognito ? (kind) => call.startCall({ id: chat.peer_id!, name: chatTitle(chat), avatar: chat.peer_avatar }, kind) : undefined}
             poll={m.poll_id ? polls[m.poll_id] ?? null : null} onVotePoll={(pid, oid, on) => { votePoll(pid, oid, on).then(loadPolls).catch((e) => toast.show(friendly(e), 'error')); }} onClosePoll={(pid) => { closePoll(pid).then(loadPolls).catch((e) => toast.show(friendly(e), 'error')); }}
             onBroadcastOptOut={!agent && chat?.kind === 'business' && chat.business_id ? () => { broadcastOptOut(chat.business_id!).then(() => toast.show('Listo: no recibirás más difusiones de este negocio', 'success')).catch((e) => toast.show(friendly(e), 'error')); } : undefined}
             onRetry={(x) => guard(() => conv.retry(x))} onReact={(x, e) => guard(() => conv.react(x.id, conv.reactions.some((r) => r.message_id === x.id && r.user_id === me && r.emoji === e) ? null : e))}
@@ -292,6 +298,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
           editing={editing} onCancelEdit={() => setEditing(null)} onTyping={conv.notifyTyping}
           onSchedule={incognito ? undefined : async (body, at, replyTo, internal) => { await scheduleMessage(me, { conversation_id: id, body, send_at: at.toISOString(), reply_to_id: replyTo, is_internal: internal }); loadScheduled(); }}
           onPoll={(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito ? () => setPollOpen(true) : undefined}
+          onLocation={geoSupported() ? () => setLocOpen(true) : undefined}
           onSend={(v) => guard(() => conv.send({ body: v.body, file: v.file, internal: v.internal, replyTo: v.replyTo }))}
           onEditSave={(mid, text) => { setEditing(null); guard(() => conv.edit(mid, text)); }}
         />
@@ -374,6 +381,8 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
       {chat && <ReportSheet visible={report} onClose={() => setReport(false)} me={me} peerId={directPeer} businessId={chat.kind === 'business' && !agent ? chat.business_id : null} conversationId={id} name={chatTitle(chat)} onBlocked={() => setBlocked(true)} />}
 
       <VideoModal url={video} onClose={() => setVideo(null)} />
+      <LocationSheet visible={locOpen} onClose={() => setLocOpen(false)} onSend={(pl) => conv.send({ body: encodeLocation(pl) })} />
+      <DocViewer visible={!!doc} url={doc?.url ?? null} name={doc?.name ?? ''} mime={doc?.mime} size={doc?.size} onClose={() => setDoc(null)} />
       <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.94)', justifyContent: 'center' }}>
           {viewer && <Image source={{ uri: viewer }} resizeMode="contain" style={{ flex: 1 }} />}

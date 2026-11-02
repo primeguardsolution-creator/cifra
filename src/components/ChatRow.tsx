@@ -7,6 +7,7 @@ import { recentSpaceSwitch, setSharedAvatar, useReducedMotion } from '../lib/mot
 import { useChats } from '../state/ChatsProvider';
 import { Chat, ConversationState } from '../lib/api';
 import { listTime } from '../lib/format';
+import { parseLocation } from '../lib/geo';
 import { formatPhone } from '../lib/phone';
 import { useAuth } from '../state/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
@@ -45,7 +46,8 @@ export function previewText(c: Chat, me?: string) {
   if (c.last_message_id == null) return tr(c.kind === 'business' && c.perspective === 'personal' ? 'Escribe tu primer mensaje' : 'Di hola 👋');
   if (c.last_deleted) return tr('Mensaje eliminado');
   const t0 = c.last_attachment_type;
-  const base = c.last_body?.trim() || tr(t0?.startsWith('image') ? '📷 Foto' : t0?.startsWith('video') ? '🎬 Vídeo' : t0?.startsWith('audio') ? '🎤 Mensaje de voz' : '📎 Archivo');
+  const base = (c.last_body?.trim() && (c.incognito || c.kind === 'group' ? tr(c.last_body.trim()) : c.last_body.trim())) || tr(t0?.startsWith('image') ? '📷 Foto' : t0?.startsWith('video') ? '🎬 Vídeo' : t0?.startsWith('audio') ? '🎤 Mensaje de voz' : '📎 Archivo');
+  if (parseLocation(c.last_body)) return (c.last_sender === me ? tr('Tú: ') : '') + tr('📍 Ubicación');
   const prefix = c.last_internal ? tr('Nota interna: ') : c.last_sender === me ? tr('Tú: ') : '';
   return prefix + base;
 }

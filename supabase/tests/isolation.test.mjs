@@ -1124,5 +1124,108 @@ await check('Negocio: el tono de fondo lo cambian los gestores', async () => {
   await denied(db.query(`update public.businesses set surface_tone = 'neon' where id = $1`, [biz]), 'unknown tone');
 });
 
+await db.exec(migration('20261111_000024_integrations.sql'));
+await db.exec(migration('20261111_000024_integrations.sql'));
+await check('Integraciones: webhooks, eventos, cola de entrega y claves de API', async () => {
+  const [{ id: biz }] = await q(`select id from public.businesses where name = 'Solapes SL'`);
+  await q(`update public.businesses set is_public = true where id = $1`, [biz]);
+  await q(`insert into public.account_recovery (user_id, email, email_verified_at) values ($1, 'ben@example.com', now()) on conflict (user_id) do update set email_verified_at = now()`, [ids.ben]);
+  // only managers manage webhooks; https only; known events only
+  const hook = await as('dani', async () => (await q(`insert into public.integration_webhooks (business_id, name, url, events) values ($1, 'Make', 'https://hook.example.com/x', array['message.received', 'conversation.created', 'customer.created', 'customer.stage_changed', 'appointment.created']) returning id, secret`, [biz]))[0]);
+  eq(hook.secret.length, 64, 'secret length');
+  await as('ben', async () => denied(db.query(`insert into public.integration_webhooks (business_id, url, events) values ($1, 'https://x.example.com', '{}')`, [biz]), 'outsider creates webhook'));
+  await as('ben', async () => eq((await q(`select * from public.integration_webhooks`)).length, 0));
+  await as('dani', async () => denied(db.query(`insert into public.integration_webhooks (business_id, url, events) values ($1, 'http://plain.example.com', '{}')`, [biz]), 'plain http'));
+  await as('dani', async () => denied(db.query(`insert into public.integration_webhooks (business_id, url, events) values ($1, 'https://x.example.com', array['everything'])`, [biz]), 'unknown event'));
+  await as('dani', async () => denied(db.query(`update public.integration_webhooks set secret = 'mine' where id = $1`, [hook.id]), 'secret is not editable'));
+  const count = async (event) => Number((await q(`select count(*)::int as n from public.integration_deliveries where webhook_id = $1 and event = $2`, [hook.id, event]))[0].n);
+  // a customer writes to the business: conversation.created + message.received; the team writing back / internal notes do not
+  const cid = await as('ben', async () => (await q(`select public.start_business_chat($1) as id`, [biz]))[0].id);
+  eq(await count('conversation.created'), 1, 'conversation.created');
+  await as('ben', async () => q(`insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'Hola, quiero un presupuesto')`, [cid, ids.ben]));
+  eq(await count('message.received'), 1, 'message.received');
+  await as('dani', async () => q(`insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'Claro')`, [cid, ids.dani]));
+  await as('dani', async () => q(`insert into public.messages (conversation_id, sender_id, body, is_internal) values ($1, $2, 'nota', true)`, [cid, ids.dani]));
+  eq(await count('message.received'), 1, 'team replies and internal notes do not fire');
+  const pay = (await q(`select payload from public.integration_deliveries where webhook_id = $1 and event = 'message.received'`, [hook.id]))[0].payload;
+  eq([pay.event, pay.data.text, pay.data.customer.user_id === ids.ben], ['message.received', 'Hola, quiero un presupuesto', true], 'payload');
+  // CRM and agenda events
+  const [{ id: cu }] = await q(`insert into public.customers (business_id, name, phone) values ($1, 'Lead Hook', '+34 600 111 222') returning id`, [biz]);
+  eq(await count('customer.created'), 1);
+  await q(`update public.customers set stage = 'proposal' where id = $1`, [cu]);
+  await q(`update public.customers set notes = 'solo notas' where id = $1`, [cu]);
+  eq(await count('customer.stage_changed'), 1, 'only stage changes fire');
+  await q(`insert into public.appointments (business_id, title, starts_at, ends_at, status, customer_id) values ($1, 'Demo', '2031-01-01T10:00:00Z', '2031-01-01T11:00:00Z', 'scheduled', $2)`, [biz, cu]);
+  eq(await count('appointment.created'), 1);
+  await as('dani', async () => q(`update public.integration_webhooks set active = false where id = $1`, [hook.id]));
+  await q(`insert into public.customers (business_id, name) values ($1, 'Silencio')`, [biz]);
+  eq(await count('customer.created'), 1, 'inactive webhooks receive nothing');
+  await as('dani', async () => q(`update public.integration_webhooks set active = true where id = $1`, [hook.id]));
+  // delivery log is visible to managers only; the queue API is for the service role only
+  await as('dani', async () => eq((await q(`select 1 from public.integration_deliveries where webhook_id = $1`, [hook.id])).length > 3, true));
+  await as('ben', async () => eq((await q(`select 1 from public.integration_deliveries`)).length, 0));
+  await as('dani', async () => denied(db.query(`select * from public.claim_deliveries(5)`), 'managers cannot claim the queue'));
+  // dispatcher: claim, lease, retry with backoff, give up after 6 tries
+  const claimed = await q(`select * from public.claim_deliveries(100, $1)`, [hook.id]);
+  eq(claimed.length >= 5, true, 'claimed');
+  eq((await q(`select * from public.claim_deliveries(100, $1)`, [hook.id])).length, 0, 'leased rows are not handed out twice');
+  const one = claimed[0];
+  await q(`select public.report_delivery($1, true, 200, null)`, [one.id]);
+  eq((await q(`select status from public.integration_deliveries where id = $1`, [one.id]))[0].status, 'delivered');
+  const bad = claimed[1];
+  await q(`select public.report_delivery($1, false, 500, 'boom')`, [bad.id]);
+  const r = (await q(`select status, next_try_at > now() + interval '30 seconds' as later, response_code from public.integration_deliveries where id = $1`, [bad.id]))[0];
+  eq([r.status, r.later, r.response_code], ['pending', true, 500], 'retry later');
+  await q(`update public.integration_deliveries set attempts = 6 where id = $1`, [bad.id]);
+  await q(`select public.report_delivery($1, false, 502, 'boom')`, [bad.id]);
+  eq((await q(`select status from public.integration_deliveries where id = $1`, [bad.id]))[0].status, 'failed');
+  eq((await q(`select last_status from public.integration_webhooks where id = $1`, [hook.id]))[0].last_status, 502);
+  // test ping
+  await as('dani', async () => q(`select public.webhook_test($1)`, [hook.id]));
+  eq(await count('test.ping'), 1, 'test ping queued');
+  await as('ben', async () => denied(db.query(`select public.webhook_test($1)`, [hook.id]), 'outsider ping'));
+  // API keys
+  const key = await as('dani', async () => (await q(`select public.create_api_key($1, 'Make') as k`, [biz]))[0].k);
+  eq([key.startsWith('cifra_'), key.length], [true, 70], 'key shape');
+  await as('ben', async () => denied(db.query(`select public.create_api_key($1, 'x')`, [biz]), 'outsider key'));
+  await as('dani', async () => denied(db.query(`select key_hash from public.integration_keys`), 'hash is not readable'));
+  await as('dani', async () => eq((await q(`select name, key_prefix from public.integration_keys where business_id = $1`, [biz]))[0], { name: 'Make', key_prefix: key.slice(0, 12) }));
+  const hash = (await q(`select encode(sha256(convert_to($1, 'utf8')), 'hex') as h`, [key]))[0].h;
+  eq((await q(`select public.api_key_auth($1) as b`, [hash]))[0].b, biz, 'key resolves to its business');
+  eq((await q(`select public.api_key_auth($1) as b`, ['0'.repeat(64)]))[0].b, null, 'unknown key');
+  // incoming customer upsert (by phone, then by e-mail), tasks
+  const up = async (args) => (await q(`select public.api_upsert_customer($1, $2, $3, $4, $5, $6, $7, $8) as r`, [biz, ...args]))[0].r;
+  const a1 = await up(['Ana API', '+34 611 222 333', null, 'lead', ['web'], null, null]);
+  eq(a1.created, true);
+  const a2 = await up(['Ana A.', '34611222333', 'ana@api.example.com', 'contacted', ['vip'], 'nota', 12000]);
+  eq([a2.created, a2.id === a1.id, a2.customer.stage, a2.customer.tags.sort()], [false, true, 'contacted', ['vip', 'web']], 'same phone, different format');
+  const a3 = await up([null, null, 'ANA@api.example.com', null, null, null, null]);
+  eq([a3.created, a3.id === a1.id], [false, true], 'matched by e-mail');
+  await denied(up(['Sin nombre', null, null, null, null, null, null]).then(() => up([null, null, 'nuevo@api.example.com', null, null, null, null])), 'a new customer needs a name');
+  await denied(up(['X', '+34 600 000 001', null, 'vip', null, null, null]), 'invalid stage');
+  const tid = (await q(`select public.api_create_task($1, $2, 'Llamar', null) as t`, [biz, a1.id]))[0].t;
+  eq(typeof tid, 'string');
+  await denied(db.query(`select public.api_create_task($1, $2, 'x', null)`, [biz, '00000000-0000-0000-0000-000000000000']), 'customer of another business');
+  await as('dani', async () => q(`select public.revoke_api_key(id) from public.integration_keys where business_id = $1`, [biz]));
+  eq((await q(`select public.api_key_auth($1) as b`, [hash]))[0].b, null, 'revoked key');
+});
+
+await db.exec(migration('20261112_000025_unarchive_on_message.sql'));
+await db.exec(migration('20261112_000025_unarchive_on_message.sql'));
+await check('Archivados: un mensaje nuevo devuelve el chat a la lista (salvo silenciado)', async () => {
+  const cid = await as('ana', async () => (await q(`select public.start_direct_chat($1) as id`, [ids.ben]))[0].id);
+  const flag = async (u) => (await q(`select archived from public.conversation_members where conversation_id = $1 and user_id = $2`, [cid, ids[u]]))[0].archived;
+  await q(`update public.conversation_members set archived = true where conversation_id = $1`, [cid]);
+  await as('ana', async () => q(`insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'hola')`, [cid, ids.ana]));
+  eq([await flag('ana'), await flag('ben')], [false, false], 'sender and receiver both get it back');
+  await q(`update public.conversation_members set archived = true where conversation_id = $1`, [cid]);
+  await q(`update public.conversation_members set muted_until = now() + interval '1 day' where conversation_id = $1 and user_id = $2`, [cid, ids.ben]);
+  await as('ana', async () => q(`insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'otra')`, [cid, ids.ana]));
+  eq([await flag('ana'), await flag('ben')], [false, true], 'muted + archived stays archived');
+  await q(`update public.conversation_members set archived = true where conversation_id = $1 and user_id = $2`, [cid, ids.ana]);
+  await as('ben', async () => q(`insert into public.messages (conversation_id, sender_id, body, is_internal) values ($1, $2, 'nota', false)`, [cid, ids.ben]));
+  eq(await flag('ben'), false, 'writing in it unarchives it for the author');
+});
+
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);

@@ -7,7 +7,7 @@ import { useAuth } from '../state/AuthProvider';
 import { useChats } from '../state/ChatsProvider';
 import { useSpace } from '../state/SpaceProvider';
 import { useTheme } from '../theme/ThemeProvider';
-import { Chip, ChatSkeleton, EmptyState, Field, Icon, IconButton, IconName, Pressy, Sheet, SheetRow, Txt, useToast } from '../ui';
+import { Badge, Chip, ChatSkeleton, EmptyState, Field, Icon, IconButton, IconName, Pressy, Sheet, SheetRow, Txt, useToast } from '../ui';
 import { friendly } from '../lib/errors';
 import { listAppointments, listRequestedAppointments, startOfDay, addDays } from '../lib/biz';
 import { useEffect } from 'react';
@@ -132,6 +132,16 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
       </ScrollView></>}
     </View>
   );
+  // WhatsApp / Telegram style: archived chats live behind one row at the top, with a count and a dot when something unread is in there.
+  const archivedChats = chats.filter((x) => x.archived);
+  const archivedUnread = archivedChats.reduce((n, x) => n + (x.muted_until && new Date(x.muted_until) > new Date() ? 0 : x.unread), 0);
+  const archivedRow = !business && filter === 'all' && !q && archivedChats.length > 0 ? (
+    <Pressy onPress={() => setFilter('archived')} accessibilityRole="button" accessibilityLabel={t('Archivados · {n}', { n: archivedChats.length })} scale={0.985} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 12 }}>
+      <View style={{ width: 52, height: 52, borderRadius: 20, backgroundColor: c.sunken, alignItems: 'center', justifyContent: 'center' }}><Icon name="archive" size={24} tone="muted" /></View>
+      <View style={{ flex: 1 }}><Txt v="bodyStrong">Archivados</Txt><Txt v="small" tone="muted">{t('{n} chats', { n: archivedChats.length })}</Txt></View>
+      {archivedUnread > 0 && <Badge count={archivedUnread} tone="new" />}
+    </Pressy>
+  ) : null;
   const atQuery = q.trim().startsWith('@') && q.trim().length > 2 ? q.trim().slice(1) : null;
   const botRow = !business && assistantMatches(q, filter, bot.loaded && !bot.seen) ? <AssistantRow /> : null;
   const atRow = !business && atQuery ? (
@@ -164,7 +174,7 @@ export function ChatsPane({ embedded }: { embedded?: boolean }) {
       <FlatList
         data={body ? [] : visible}
         keyExtractor={(x) => x.id}
-        ListHeaderComponent={<>{header}{!business && filter === 'all' && !q && <InvitationsBanner />}{atRow}{botRow}</>}
+        ListHeaderComponent={<>{header}{!business && filter === 'all' && !q && <InvitationsBanner />}{atRow}{botRow}{archivedRow}</>}
         ListEmptyComponent={body}
         renderItem={({ item, index }) => <ChatRow index={index} chat={item} selected={item.id === selectedId} showState={business} onMenu={business ? undefined : setMenuFor} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} />}

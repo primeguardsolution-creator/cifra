@@ -23,6 +23,7 @@ type Props = {
   autoFocus?: boolean;
   onSchedule?: (body: string, sendAt: Date, replyTo: string | null, internal: boolean) => Promise<void> | void;
   /** Opens the new-poll sheet (direct chats and groups). */ onPoll?: () => void;
+  /** Opens the share-location sheet. */ onLocation?: () => void;
 };
 
 export function Composer(p: Props) {
@@ -207,6 +208,7 @@ export function Composer(p: Props) {
         <SheetRow icon="images" label="Foto o vídeo" sub="Desde tu galería" onPress={() => run(pickChatMedia)} />
         {Platform.OS !== 'web' && <SheetRow icon="camera" label="Cámara" sub="Haz una foto ahora" onPress={() => run(takePhoto)} />}
         {p.onPoll && <SheetRow icon="stats-chart" label="Encuesta" sub="Una pregunta con 2 a 6 opciones" onPress={() => { setAttach(false); p.onPoll?.(); }} />}
+        {p.onLocation && <SheetRow icon="location" label="Ubicación" sub="Envía dónde estás ahora mismo" onPress={() => { setAttach(false); p.onLocation?.(); }} />}
         <SheetRow icon="document-text" label="Documento" sub="PDF, texto y más · máx. 25 MB" onPress={() => run(pickDocument)} />
       </Sheet>
       <Sheet visible={sched} onClose={() => setSched(false)} title="Programar mensaje">

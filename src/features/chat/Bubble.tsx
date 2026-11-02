@@ -12,12 +12,15 @@ import { parseApptCard } from '../../lib/biz';
 import { ApptCard } from './ApptCard';
 import { VideoThumb } from './VideoPlayer';
 import { VoicePlayer } from './VoicePlayer';
+import { FileCard } from '../files/FileCard';
+import { LocationCard } from '../location/LocationCard';
+import { parseLocation } from '../../lib/geo';
 import { t, tr } from '../../i18n';
 
 export type BubbleProps = {
   m: Message; mine: boolean; replyTo?: Message | null; replyAuthor?: string; author?: string; showAuthor?: boolean;
   joinedOlder: boolean; joinedNewer: boolean; read: boolean; /** Reached the other person's device (two grey ticks). */ delivered?: boolean; reactions: Reaction[]; me: string;
-  onOpenActions: (m: Message) => void; onOpenImage: (uri: string) => void; onOpenVideo?: (uri: string) => void; onRetry: (m: Message) => void; onJumpTo?: (id: string) => void;
+  onOpenActions: (m: Message) => void; onOpenImage: (uri: string) => void; onOpenVideo?: (uri: string) => void; onOpenFile?: (m: Message, url: string) => void; onRetry: (m: Message) => void; onJumpTo?: (id: string) => void;
   onReact: (m: Message, emoji: string) => void; starred?: boolean; highlight?: boolean; onReply?: (m: Message) => void; onCallBack?: (kind: 'audio' | 'video') => void;
   /** Business team view: Slack-style message rows instead of bubbles. */
   slack?: boolean; slackName?: string; authorId?: string; authorAvatar?: string | null; isCustomer?: boolean;
@@ -38,7 +41,7 @@ function RichText({ text, color, linkColor }: { text: string; color: string; lin
   );
 }
 
-function Attachment({ m, mine, onOpenImage, onOpenVideo }: { m: Message; mine: boolean; onOpenImage: (uri: string) => void; onOpenVideo?: (uri: string) => void }) {
+function Attachment({ m, mine, onOpenImage, onOpenVideo, onOpenFile }: { m: Message; mine: boolean; onOpenImage: (uri: string) => void; onOpenVideo?: (uri: string) => void; onOpenFile?: (m: Message, url: string) => void }) {
   const { c } = useTheme();
   const [url, setUrl] = useState<string | null>(m.localUri ?? null);
   const isImage = m.attachment_type?.startsWith('image/');
@@ -60,19 +63,7 @@ function Attachment({ m, mine, onOpenImage, onOpenVideo }: { m: Message; mine: b
     );
   }
   if (isVideo) return <View style={{ marginBottom: m.body ? 6 : 0 }}><VideoThumb url={url} pending={m.pending} onOpen={() => url && (onOpenVideo ? onOpenVideo(url) : Linking.openURL(url))} /></View>;
-  const fg = mine ? c.bubbleOutText : c.bubbleInText;
-  return (
-    <Pressy onPress={() => url && Linking.openURL(url)} scale={0.98} accessibilityRole="link" accessibilityLabel={t('Abrir {name}', { name: m.attachment_name ?? tr('archivo') })}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, backgroundColor: mine ? 'rgba(255,255,255,0.12)' : c.surfaceAlt, minWidth: 220, marginBottom: m.body ? 6 : 0 }}>
-      <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-        {m.pending ? <ActivityIndicator color={c.accent} /> : <Icon name={isVideo ? 'play' : 'document-text'} size={20} color={c.accentSoftText} />}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt v="smallStrong" numberOfLines={1} style={{ color: fg }}>{m.attachment_name ?? (isVideo ? 'Vídeo' : 'Archivo')}</Txt>
-        <Txt v="caption" style={{ color: mine ? c.bubbleOutMeta : c.textMuted }}>{[isVideo ? 'Vídeo' : 'Documento', bytes(m.attachment_size)].filter(Boolean).join(' · ')}</Txt>
-      </View>
-    </Pressy>
-  );
+  return <FileCard name={m.attachment_name} mime={m.attachment_type} size={m.attachment_size} pending={m.pending} mine={mine} hasText={!!m.body} onPress={() => url && (onOpenFile ? onOpenFile(m, url) : Linking.openURL(url))} />;
 }
 
 function BubbleBase(p: BubbleProps) {
@@ -153,8 +144,8 @@ function BubbleBase(p: BubbleProps) {
             )}
             {deleted ? <Txt v="small" tone="faint" style={{ fontStyle: 'italic' }}>Mensaje eliminado</Txt> : (
               <>
-                {m.attachment_type && (m.attachment_path || m.localUri) && <Attachment m={m} mine={false} onOpenImage={p.onOpenImage} onOpenVideo={p.onOpenVideo} />}
-                {m.body && parseApptCard(m.body) ? <ApptCard body={m.body} mine={false} team /> : m.body ? <RichText text={m.body} color={c.text} linkColor={c.highlight} /> : null}
+                {m.attachment_type && (m.attachment_path || m.localUri) && <Attachment m={m} mine={false} onOpenImage={p.onOpenImage} onOpenVideo={p.onOpenVideo} onOpenFile={p.onOpenFile} />}
+                {m.body && parseApptCard(m.body) ? <ApptCard body={m.body} mine={false} team /> : m.body && parseLocation(m.body) ? <LocationCard place={parseLocation(m.body)!} mine={false} /> : m.body ? <RichText text={m.is_automated ? tr(m.body) : m.body} color={c.text} linkColor={c.highlight} /> : null}
               </>
             )}
           </View>
@@ -208,7 +199,7 @@ function BubbleBase(p: BubbleProps) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="ban" size={14} tone="faint" /><Txt v="small" tone="faint" style={{ fontStyle: 'italic' }}>Mensaje eliminado</Txt></View>
           ) : (
             <>
-              {m.attachment_type && (m.attachment_path || m.localUri) && <Attachment m={m} mine={mine} onOpenImage={p.onOpenImage} onOpenVideo={p.onOpenVideo} />}
+              {m.attachment_type && (m.attachment_path || m.localUri) && <Attachment m={m} mine={mine} onOpenImage={p.onOpenImage} onOpenVideo={p.onOpenVideo} onOpenFile={p.onOpenFile} />}
               {m.body && parseApptCard(m.body) ? <ApptCard body={m.body} mine={mine} team={!!p.slack} /> : m.body && /^[📞📹]/u.test(m.body) ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 210, paddingVertical: 2 }}>
                   <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: /sin respuesta/.test(m.body) && !mine ? c.dangerSoft : mine ? 'rgba(255,255,255,0.16)' : c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -221,7 +212,8 @@ function BubbleBase(p: BubbleProps) {
                   {p.onCallBack && <Pressy onPress={() => p.onCallBack!(m.body!.startsWith('📹') ? 'video' : 'audio')} accessibilityRole="button" accessibilityLabel="Devolver la llamada" scale={0.9} style={{ paddingHorizontal: 11, height: 30, borderRadius: 15, backgroundColor: mine ? 'rgba(255,255,255,0.18)' : c.accent, justifyContent: 'center' }}><Txt v="caption" style={{ color: mine ? c.bubbleOutText : c.accentText, fontFamily: 'Inter_600SemiBold' }}>{mine ? 'Repetir' : 'Devolver'}</Txt></Pressy>}
                 </View>
               ) : m.poll_id && p.poll ? <PollCard poll={p.poll} mine={mine} light={mine && !incognito} onVote={(o, on) => p.onVotePoll?.(p.poll!.id, o, on)} onClose={() => p.onClosePoll?.(p.poll!.id)} />
-              : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
+              : m.body && parseLocation(m.body) ? <LocationCard place={parseLocation(m.body)!} mine={mine} />
+              : m.body ? <RichText text={m.is_automated ? tr(m.body) : m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
             </>
           )}
           {m.is_broadcast && !mine && p.onBroadcastOptOut && !deleted && <Pressy onPress={p.onBroadcastOptOut} accessibilityRole="button" scale={0.97} style={{ marginTop: 6, alignSelf: 'flex-start' }}><Txt v="caption" style={{ color: c.accent, textDecorationLine: 'underline' }}>No recibir más difusiones de este negocio</Txt></Pressy>}
