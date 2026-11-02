@@ -1552,4 +1552,6 @@ export const rows: [string, string, string][] = [
   ["Avisa al equipo de que el cliente quiere una persona", "Tells the team the customer wants a person", "Teilt dem Team mit, dass der Kunde eine Person möchte"],
   ["Enlace", "Link", "Link"],
   ["Abre el enlace que pongas", "Opens the link you set", "Öffnet den Link, den du festlegst"],
+  ["Escribe el mensaje y elige Programar para enviarlo más tarde.", "Write the message and choose Schedule to send it later.", "Schreibe die Nachricht und wähle Planen, um sie später zu senden."],
+  ["Galería", "Gallery", "Galerie"],
 ];
