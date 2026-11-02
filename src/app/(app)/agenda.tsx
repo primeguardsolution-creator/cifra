@@ -15,7 +15,8 @@ import { font } from '../../theme/tokens';
 import { Avatar, Chip, Field, Icon, Pressy, Sheet, Txt, useToast, Button } from '../../ui';
 import { loc, t, tr } from '../../i18n';
 
-const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+/** Monday-first weekday initials in the app language (2024-01-01 was a Monday). */
+const weekdayInitials = () => Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(loc(), { weekday: 'narrow' }).toUpperCase());
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 const QUICK_TITLES = ['Consulta', 'Reunión', 'Visita', 'Llamada', 'Revisión', 'Demostración'];
 
@@ -80,9 +81,10 @@ export default function Agenda() {
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, gap: 6, borderBottomWidth: 1, borderBottomColor: c.border }}>
         <Key icon="chevron-back" small onPress={() => shift(-1)} />
         <Txt v="h3" style={{ flex: 1, textAlign: 'center' }}>{monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}</Txt>
+        <Key icon="today" small label="Hoy" onPress={() => { setAnchor(today); setSelected(today); }} />
         <Key icon="chevron-forward" small onPress={() => shift(1)} />
       </View>
-      <View style={{ flexDirection: 'row' }}>{DOW.map((d) => <Txt key={d} v="mono" tone="faint" style={{ flex: 1, textAlign: 'center', paddingVertical: 7 }}>{d}</Txt>)}</View>
+      <View style={{ flexDirection: 'row' }}>{weekdayInitials().map((d, i) => <Txt key={i} v="mono" tone="faint" style={{ flex: 1, textAlign: 'center', paddingVertical: 7 }}>{d}</Txt>)}</View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {grid.days.map((d) => {
           const inMonth = d.getMonth() === anchor.getMonth();
@@ -279,7 +281,7 @@ function NewAppointment({ visible, onClose, bid, customers, team, me, day, prese
       toast.show(user || (customer && customers.find((x) => x.id === customer)?.user_id) ? 'Invitación enviada · la verá en su chat y podrá aceptarla' : 'Cita agendada', 'success'); onDone();
     } catch (e) {
       const msg = String((e as Error).message);
-      toast.show(/appointment_overlap/.test(msg) ? 'Esa persona ya tiene una cita a esa hora.' : /customer_is_team/.test(msg) ? 'Esa persona es de tu equipo: asígnale la cita en «Atiende».' : friendly(e, 'No se pudo agendar.'), 'error');
+      toast.show(/appointment_overlap/.test(msg) ? 'Ya hay una cita en ese horario. Elige otra hora.' : /customer_is_team/.test(msg) ? 'Esa persona es de tu equipo: asígnale la cita en «Atiende».' : friendly(e, 'No se pudo agendar.'), 'error');
     } finally { setBusy(false); }
   };
   return (

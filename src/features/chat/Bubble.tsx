@@ -90,13 +90,7 @@ function BubbleBase(p: BubbleProps) {
   useEffect(() => {
     if ((enter as unknown as { _value: number })._value >= 1) return;
     if (reduced) { enter.setValue(1); return; }
-    Animated.spring(enter, {
-      toValue: 1,
-      useNativeDriver: native,
-      damping: 19,
-      stiffness: 150,
-      mass: 0.78,
-    }).start();
+    Animated.timing(enter, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
   }, [enter, native, reduced]);
   const pan = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dx > 14 && g.dx > Math.abs(g.dy) * 2 && !latest.current.m.deleted_at && !latest.current.m.pending,
@@ -132,7 +126,7 @@ function BubbleBase(p: BubbleProps) {
     const first = !p.joinedOlder;
     return (
       <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})}
-        style={{ flexDirection: 'row', gap: 11, paddingHorizontal: 14, paddingTop: first ? 10 : 1, paddingBottom: 1, backgroundColor: p.highlight ? c.accentSoft : hover ? c.surfaceAlt : 'transparent', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 18 : 10, 0] }) }] }}>
+        style={{ flexDirection: 'row', gap: 11, paddingHorizontal: 14, paddingTop: first ? 10 : 1, paddingBottom: 1, backgroundColor: p.highlight ? c.accentSoft : hover ? c.surfaceAlt : 'transparent', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 8 : 6, 0] }) }] }}>
         <View style={{ width: 36, alignItems: 'center', paddingTop: first ? 2 : 4 }}>
           {first ? <Avatar name={name} seed={p.authorId ?? name} path={p.authorAvatar} size={36} /> : hover ? <Txt style={{ fontFamily: 'GeistMono_500Medium', fontSize: 9, color: c.textFaint }}>{messageTime(m.created_at)}</Txt> : null}
         </View>
@@ -144,7 +138,7 @@ function BubbleBase(p: BubbleProps) {
               <Txt style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 15, lineHeight: 20, color: p.isCustomer ? c.text : c.highlight }}>{name}</Txt>
               {p.isCustomer && <View style={{ paddingHorizontal: 5, height: 16, borderRadius: 3, backgroundColor: c.sunken, justifyContent: 'center' }}><Txt style={{ fontFamily: 'GeistMono_500Medium', fontSize: 9, color: c.textMuted }}>CLIENTE</Txt></View>}
               <Txt v="mono" tone="faint">{messageTime(m.created_at)}</Txt>
-              {m.edited_at && !deleted && <Txt v="caption" tone="faint">(editado)</Txt>}
+              {m.edited_at && !deleted && <Txt v="caption" tone="faint">({t('editado')})</Txt>}
               {m.is_automated && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="flash" size={10} color={c.highlight} /><Txt v="mono" tone="faint">AUTOMÁTICO</Txt></View>}
               {m.is_broadcast && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="megaphone" size={10} color={c.highlight} /><Txt v="mono" tone="faint">DIFUSIÓN</Txt></View>}
             </View>
@@ -189,7 +183,7 @@ function BubbleBase(p: BubbleProps) {
   }
 
   return (
-    <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})} style={{ paddingHorizontal: 12, marginTop: p.joinedOlder ? 2 : 10, alignItems: mine ? 'flex-end' : 'flex-start', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 38 : 10, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 0.94 : 0.985, 1] }) }] }}>
+    <Animated.View {...pan.panHandlers} {...(Platform.OS === 'web' ? ({ onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) } as object) : {})} style={{ paddingHorizontal: 12, marginTop: p.joinedOlder ? 2 : 10, alignItems: mine ? 'flex-end' : 'flex-start', opacity: enter, transform: [{ translateX: dx }, { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 10 : 6, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [mine ? 0.98 : 0.99, 1] }) }] }}>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: -2, top: '50%', marginTop: -16, width: 32, height: 32, borderRadius: 16, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center', opacity: dx.interpolate({ inputRange: [0, 40], outputRange: [0, 1], extrapolate: 'clamp' }), transform: [{ scale: dx.interpolate({ inputRange: [0, 40], outputRange: [0.4, 1], extrapolate: 'clamp' }) }, { translateX: -34 }] }}>
         <Icon name="arrow-undo" size={17} color={c.accentSoftText} />
       </Animated.View>
@@ -233,7 +227,7 @@ function BubbleBase(p: BubbleProps) {
           {m.is_broadcast && !mine && p.onBroadcastOptOut && !deleted && <Pressy onPress={p.onBroadcastOptOut} accessibilityRole="button" scale={0.97} style={{ marginTop: 6, alignSelf: 'flex-start' }}><Txt v="caption" style={{ color: c.accent, textDecorationLine: 'underline' }}>No recibir más difusiones de este negocio</Txt></Pressy>}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 3 }}>
             {p.starred && <Icon name="star" size={11} color={mine && !incognito ? '#F6D77A' : c.warning} />}
-            {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>editado</Txt>}
+            {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>{t('editado')}</Txt>}
             <Txt v="mono" style={{ color: meta, fontSize: 10 }}>{messageTime(m.created_at)}</Txt>
             {mine && !deleted && !internal && (m.pending ? <Icon name="time-outline" size={13} color={meta} /> : m.failed ? <Icon name="alert-circle" size={14} color={c.danger} /> : <Icon name={p.read || p.delivered ? 'checkmark-done' : 'checkmark'} size={15} color={p.read && !incognito ? '#7CF0C4' : meta} />)}
           </View>

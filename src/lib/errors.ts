@@ -4,6 +4,8 @@ const known: [RegExp, string][] = [
   [/rate_limited/, 'Demasiados intentos seguidos. Espera un minuto e inténtalo de nuevo.'],
   [/user_not_found/, 'No encontramos a nadie con ese número en CIFRA.'],
   [/email_not_verified/, 'Para hacer esto verifica tu correo en Ajustes → Seguridad de la cuenta.'],
+  [/status_not_deleted/, 'No se pudo eliminar. Puede que ya no exista o que no tengas permiso.'],
+  [/appointment_overlap/, 'Ya hay una cita en ese horario. Elige otra hora.'],
   [/own_business/, 'Eres parte de este negocio; no puedes escribirle como cliente.'],
   [/business_not_found/, 'Ese negocio ya no está disponible.'],
   [/forbidden_role/, 'No tienes permiso para asignar ese rol.'],

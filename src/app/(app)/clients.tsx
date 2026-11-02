@@ -32,6 +32,8 @@ export default function Clients() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [q, setQ] = useState('');
   const [view, setView] = useState<'board' | 'list'>('board');
+  const [stageFilter, setStageFilter] = useState<Stage | 'all'>('all');
+  const [showDone, setShowDone] = useState(false);
   const [sel, setSel] = useState<Customer | null>(null);
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,7 +53,8 @@ export default function Clients() {
   }, [bid, canWrite, loadPeople]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
-  const filtered = useMemo(() => (rows ?? []).filter((x) => !q.trim() || x.name.toLowerCase().includes(q.trim().toLowerCase()) || x.tags.some((t) => t.includes(q.trim().toLowerCase())) || (x.phone ?? '').includes(q.trim())), [rows, q]);
+  const searched = useMemo(() => (rows ?? []).filter((x) => !q.trim() || x.name.toLowerCase().includes(q.trim().toLowerCase()) || x.tags.some((t) => t.includes(q.trim().toLowerCase())) || (x.phone ?? '').includes(q.trim())), [rows, q]);
+  const filtered = useMemo(() => searched.filter((x) => stageFilter === 'all' || x.stage === stageFilter), [searched, stageFilter]);
   if (!active) return <NoBusiness onCreate={() => router.push('/business-create')} />;
 
   const patch = (cu: Customer, p: Partial<Customer>) => {
@@ -71,6 +74,7 @@ export default function Clients() {
     try { const id = await startNegotiation(bid, cu.id); setSel(null); router.push({ pathname: '/chat/[id]', params: { id } }); } catch (e) { toast.show(friendly(e), 'error'); }
   };
   const openTasks = tasks.filter((t) => !t.done);
+  const doneTasks = tasks.filter((t) => t.done);
   /** "Escribir": opens the existing business chat or creates it (also when only the phone was known and that number is on CIFRA). */
   const write = async (cu: Customer) => {
     const existing = chatFor(cu);
@@ -106,7 +110,7 @@ export default function Clients() {
 
   const board = (
     <ScrollView horizontal showsHorizontalScrollIndicator={wide} contentContainerStyle={{ gap: 12, padding: 16, paddingTop: 4 }}>
-      {stages.map((s) => {
+      {stages.filter((s) => stageFilter === 'all' || s.key === stageFilter).map((s) => {
         const list = filtered.filter((x) => x.stage === s.key);
         return (
           <View key={s.key} style={{ width: 252, borderRadius: r(12), backgroundColor: c.sunken, padding: 8, gap: 8, alignSelf: 'flex-start' }}>
@@ -124,14 +128,27 @@ export default function Clients() {
 
   const list = (
     <View style={{ padding: 16, paddingTop: 4, gap: 8 }}>
-      {filtered.map((cu) => (
+      {stages.map((s) => {
+        const group = filtered.filter((x) => x.stage === s.key).sort((x, y) => x.name.localeCompare(y.name));
+        if (!group.length) return null;
+        return (
+          <View key={s.key} style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingTop: 6 }}>
+              <View style={{ width: 4, height: 16, borderRadius: 1, backgroundColor: s.color }} />
+              <Txt v="smallStrong" style={{ flex: 1 }}>{s.label}</Txt><Txt v="mono" tone="faint">{group.length}</Txt>
+            </View>
+            {group.map((cu) => (
         <Pressy key={cu.id} onPress={() => setSel(cu)} accessibilityRole="button" scale={0.99} hoverStyle={{ backgroundColor: c.surfaceAlt }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: r(10), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
           <Avatar name={cu.name} seed={cu.user_id ?? cu.id} path={avatarOf(cu)} size={40} />
           <View style={{ flex: 1 }}><Txt v="bodyStrong" numberOfLines={1}>{cu.name}</Txt><Txt v="caption" tone="muted" numberOfLines={1}>{[cu.phone, cu.email].filter(Boolean).join(' · ') || ago(cu.last_contact_at)}</Txt></View>
           <Pill label={stages.find((s) => s.key === cu.stage)!.label} color={stages.find((s) => s.key === cu.stage)!.color} />
           {canChat(cu) && <IconButton icon="chatbubble-ellipses-outline" label={T('Escribir a {name}', { name: cu.name })} tone="accent" size={36} pop disabled={writing === cu.id} onPress={() => write(cu)} />}
         </Pressy>
-      ))}
+            ))}
+          </View>
+        );
+      })}
+      {filtered.length === 0 && <Txt tone="muted" style={{ textAlign: 'center', padding: 20 }}>Sin resultados</Txt>}
     </View>
   );
 
@@ -142,6 +159,10 @@ export default function Clients() {
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={c.highlight} />} contentContainerStyle={{ paddingBottom: 30 }}>
         <View style={{ padding: 16, paddingBottom: 10, gap: 12 }}>
           <Field value={q} onChangeText={setQ} placeholder="Buscar por nombre, #etiqueta o teléfono" icon="search" autoCapitalize="none" style={{ paddingVertical: 9 }} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+            <Chip label={T('Todos · {n}', { n: searched.length })} active={stageFilter === 'all'} onPress={() => setStageFilter('all')} />
+            {stages.map((s) => <Chip key={s.key} label={`${tr(s.label)} · ${searched.filter((x) => x.stage === s.key).length}`} icon={s.icon as IconName} active={stageFilter === s.key} onPress={() => setStageFilter(stageFilter === s.key ? 'all' : s.key)} />)}
+          </ScrollView>
           <View style={{ borderRadius: r(12), borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, overflow: 'hidden' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderBottomWidth: openTasks.length || canWrite ? 1 : 0, borderBottomColor: c.border }}>
               <Icon name="checkbox" size={17} color={c.highlight} /><Txt v="smallStrong" style={{ flex: 1 }}>Tareas pendientes</Txt><Txt v="mono" tone="faint">{openTasks.length}</Txt>
@@ -157,6 +178,23 @@ export default function Clients() {
                 </View>
               );
             })}
+            {doneTasks.length > 0 && (
+              <>
+                <Pressy onPress={() => setShowDone((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: showDone }} scale={0.99} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: c.border }}>
+                  <Icon name="checkmark-done" size={16} tone="muted" /><Txt v="small" tone="muted" style={{ flex: 1 }}>{T('Completadas · {n}', { n: doneTasks.length })}</Txt><Icon name={showDone ? 'chevron-up' : 'chevron-down'} size={16} tone="faint" />
+                </Pressy>
+                {showDone && doneTasks.slice(0, 30).map((t) => {
+                  const cu = rows?.find((x) => x.id === t.customer_id);
+                  return (
+                    <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+                      <Pressy onPress={() => { setTasks((cur) => cur.map((x) => (x.id === t.id ? { ...x, done: false } : x))); setTaskDone(t.id, false).catch(() => load()); }} accessibilityRole="checkbox" accessibilityState={{ checked: true }} accessibilityLabel={T('Reabrir {title}', { title: t.title })} scale={0.85}><Icon name="checkbox" size={20} color={c.success} /></Pressy>
+                      <View style={{ flex: 1 }}><Txt v="small" tone="muted" numberOfLines={1} style={{ textDecorationLine: 'line-through' }}>{t.title}</Txt>{cu ? <Txt v="caption" tone="faint">{cu.name}</Txt> : null}</View>
+                      <Pressy onPress={() => { setTasks((cur) => cur.filter((x) => x.id !== t.id)); deleteTask(t.id).catch(() => load()); }} accessibilityRole="button" accessibilityLabel="Borrar tarea" scale={0.85}><Icon name="close" size={16} tone="faint" /></Pressy>
+                    </View>
+                  );
+                })}
+              </>
+            )}
             {canWrite && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderTopWidth: openTasks.length ? 1 : 0, borderTopColor: c.border }}>
                 <View style={{ flex: 1 }}><Field value={taskText} onChangeText={setTaskText} placeholder="Nueva tarea… (Enter para añadir)" style={{ paddingVertical: 8 }} returnKeyType="done" onSubmitEditing={async () => { if (!taskText.trim() || !bid) return; try { const t = await addTask(bid, { title: taskText, due_at: addDays(startOfDay(new Date()), 1).toISOString() }); setTasks((cur) => [t, ...cur]); setTaskText(''); } catch (e) { toast.show(friendly(e), 'error'); } }} /></View>

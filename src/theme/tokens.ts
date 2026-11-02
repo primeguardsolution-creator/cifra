@@ -115,6 +115,22 @@ export const bizAccentPatches: Record<BizAccentKey, Record<Mode, Partial<Palette
     dark: { accent: '#B06CFF', accentText: '#1A0633', accentSoft: '#1E1230', accentSoftText: '#D1A8FF', highlight: '#C084FC', highlightText: '#1A0633', bubbleOut: '#45206B', bubbleOutText: '#F6EEFF', bubbleOutMeta: 'rgba(246,238,255,0.6)', railText: '#9B86B8' },
   },
 };
+/** Background tone of the Business workspace (shared by the team; the accent colour is separate). */
+export type BizToneKey = 'default' | 'neutral' | 'sky' | 'mint' | 'rose' | 'slate';
+export const bizToneOptions: { key: BizToneKey; label: string; swatch: string; swatchDark: string }[] = [
+  { key: 'default', label: 'Predeterminado', swatch: '#F3F2EC', swatchDark: '#000000' }, { key: 'neutral', label: 'Neutro', swatch: '#FFFFFF', swatchDark: '#0E0E10' },
+  { key: 'sky', label: 'Cielo', swatch: '#EDF3FB', swatchDark: '#08101C' }, { key: 'mint', label: 'Menta', swatch: '#EAF5EF', swatchDark: '#07140E' },
+  { key: 'rose', label: 'Rosa', swatch: '#FAEFF1', swatchDark: '#16090D' }, { key: 'slate', label: 'Pizarra', swatch: '#E8EAEE', swatchDark: '#101319' },
+];
+export const bizTonePatches: Record<BizToneKey, Record<Mode, Partial<Palette>>> = {
+  default: { light: {}, dark: {} },
+  neutral: { light: { bg: '#FFFFFF', surfaceAlt: '#F5F5F6', sunken: '#EEEEF0', border: '#E4E4E8', borderStrong: '#C9C9D0' }, dark: { bg: '#0E0E10', surface: '#161618', surfaceAlt: '#1E1E21', sunken: '#0A0A0B', border: '#2A2A2E', borderStrong: '#3E3E44' } },
+  sky: { light: { bg: '#EDF3FB', surfaceAlt: '#E1EBF7', sunken: '#D8E4F3', border: '#CBD9EB', borderStrong: '#A9BDD6' }, dark: { bg: '#08101C', surface: '#0D1726', surfaceAlt: '#13203A', sunken: '#050A12', border: '#1B2B47', borderStrong: '#2E4469' } },
+  mint: { light: { bg: '#EAF5EF', surfaceAlt: '#DDEEE5', sunken: '#D2E7DB', border: '#C3DCCE', borderStrong: '#9CBFAB' }, dark: { bg: '#07140E', surface: '#0C1D15', surfaceAlt: '#12291E', sunken: '#040C08', border: '#1A3328', borderStrong: '#2C5240' } },
+  rose: { light: { bg: '#FAEFF1', surfaceAlt: '#F4E1E5', sunken: '#EDD6DB', border: '#E5C8CF', borderStrong: '#C9A0AA' }, dark: { bg: '#16090D', surface: '#1F0F14', surfaceAlt: '#2A161D', sunken: '#0E0508', border: '#3A1D27', borderStrong: '#5B2F3E' } },
+  slate: { light: { bg: '#E8EAEE', surfaceAlt: '#DDE0E6', sunken: '#D2D6DE', border: '#C6CBD5', borderStrong: '#A3AAB8' }, dark: { bg: '#101319', surface: '#171B23', surfaceAlt: '#1F242E', sunken: '#0B0D12', border: '#2A303C', borderStrong: '#404858' } },
+};
+export const legacyBizTone = (k: string | null | undefined): BizToneKey => (k && k in bizTonePatches ? (k as BizToneKey) : 'default');
 export const legacyBizAccent = (a: string | null | undefined): BizAccentKey => (a && a in bizAccentPatches ? (a as BizAccentKey) : 'amber');
 
 export const radius = { sm: 10, md: 14, lg: 20, xl: 28, pill: 999 };

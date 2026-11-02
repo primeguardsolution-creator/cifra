@@ -1,9 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { createElement, useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Image, Linking, Modal, Platform, View } from 'react-native';
+import { Animated, Image, KeyboardAvoidingView, Linking, Modal, Platform, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusRow } from '../../lib/api';
+import { friendly } from '../../lib/errors';
 import { relative } from '../../lib/format';
 import { signedMediaUrl } from '../../lib/media';
 import { LinkCard } from '../../components/LinkCard';
@@ -13,7 +14,9 @@ import { Avatar, Icon, IconButton, Pressy, Txt } from '../../ui';
 import { t } from '../../i18n';
 
 type Props = {
-  visible: boolean; items: StatusRow[]; name: string; avatarPath?: string | null; seed: string; mine?: boolean; onClose: () => void; onDelete?: (s: StatusRow) => void;
+  visible: boolean; items: StatusRow[]; name: string; avatarPath?: string | null; seed: string; mine?: boolean; onClose: () => void; /** Must throw when the deletion fails: the viewer shows the error itself (toasts sit behind a full-screen modal). */ onDelete?: (s: StatusRow) => Promise<void> | void;
+  /** Someone else's status: send a private reply (it lands in your 1:1 chat with the author). Must throw when it fails. */
+  onReply?: (s: StatusRow, text: string) => Promise<void>;
   /** Business posts: show the storefront badge and a "Escribir" call to action that opens the public profile. */
   business?: { id: string; handle?: string | null } | null;
 };
@@ -21,15 +24,40 @@ const DURATION = 5500;
 const MAX_VIDEO = 90_000;
 
 /** Full-screen story viewer: text on a gradient, photos and (web) autoplaying videos, with per-item progress bars. */
-export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onClose, onDelete, business }: Props) {
+export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onClose, onDelete, onReply, business }: Props) {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+  const [delError, setDelError] = useState<string | null>(null);
+  useEffect(() => { setConfirmDel(false); setDelError(null); }, [index, visible]);
+  useEffect(() => { if (!confirmDel) return; const tm = setTimeout(() => setConfirmDel(false), 4000); return () => clearTimeout(tm); }, [confirmDel]);
+  const removeCurrent = async () => {
+    if (!onDelete || delBusy) return;
+    if (!confirmDel) { setConfirmDel(true); return; }
+    setDelBusy(true); setDelError(null);
+    try { await onDelete(items[index]); setConfirmDel(false); if (items.length <= 1) onClose(); } catch (e) { setDelError(friendly(e, 'No se pudo eliminar.')); } finally { setDelBusy(false); }
+  };
+  const [reply, setReply] = useState('');
+  const [replyBusy, setReplyBusy] = useState(false);
+  const [replyNote, setReplyNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [typing, setTyping] = useState(false);
+  useEffect(() => { setReply(''); setReplyNote(null); setTyping(false); }, [index, visible]);
+  useEffect(() => { if (!replyNote?.ok) return; const tm = setTimeout(() => setReplyNote(null), 1800); return () => clearTimeout(tm); }, [replyNote]);
+  const sendReply = async (text: string) => {
+    const body = text.trim();
+    if (!onReply || !body || replyBusy) return;
+    setReplyBusy(true); setReplyNote(null);
+    try { await onReply(items[index], body); setReply(''); setReplyNote({ ok: true, text: t('Respuesta enviada') }); } catch (e) { setReplyNote({ ok: false, text: friendly(e, 'No se pudo enviar la respuesta.') }); } finally { setReplyBusy(false); }
+  };
   const [media, setMedia] = useState<string | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
   const anim = useRef<Animated.CompositeAnimation | null>(null);
   const current = items[index];
 
   useEffect(() => { if (visible) setIndex(0); }, [visible]);
+  // While the reply field is focused the story waits; it resumes (from the start of this item) when the field loses focus.
+  const resumeRef = useRef<() => void>(() => {});
 
   const next = useCallback(() => setIndex((i) => { if (i + 1 >= items.length) { onClose(); return i; } return i + 1; }), [items.length, onClose]);
   const prev = () => setIndex((i) => Math.max(0, i - 1));
@@ -41,6 +69,7 @@ export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onC
     anim.current.start(({ finished }) => finished && next());
   }, [progress, next]);
 
+  resumeRef.current = () => { if (current && (current.kind !== 'video' || Platform.OS !== 'web')) run(current.kind === 'video' ? 12_000 : DURATION); };
   useEffect(() => {
     if (!visible || !current) return;
     setMedia(null);
@@ -72,16 +101,16 @@ export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onC
                 : media ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Pressy onPress={() => Linking.openURL(media)} accessibilityRole="button" accessibilityLabel="Reproducir vídeo" scale={0.94} style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}><Icon name="play" size={40} color="#fff" /></Pressy></View> : null
               : media ? <Image source={{ uri: media }} resizeMode="contain" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' } as object} /> : null}
           {current.kind === 'text' && <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 36 }}><Txt style={{ color: '#fff', fontSize: 30, lineHeight: 38, textAlign: 'center', fontFamily: 'Inter_700Bold' }}>{current.body}</Txt></View>}
-          {current.kind !== 'text' && current.body ? <View style={{ position: 'absolute', bottom: insets.bottom + (business ? 96 : 40), left: 0, right: 0, padding: 20, backgroundColor: 'rgba(0,0,0,0.45)' }}><Txt style={{ color: '#fff', textAlign: 'center' }}>{current.body}</Txt></View> : null}
+          {current.kind !== 'text' && current.body ? <View style={{ position: 'absolute', bottom: insets.bottom + (business ? 96 : mine ? 40 : 84), left: 0, right: 0, padding: 20, backgroundColor: 'rgba(0,0,0,0.45)' }}><Txt style={{ color: '#fff', textAlign: 'center' }}>{current.body}</Txt></View> : null}
 
           <View style={{ position: 'absolute', inset: 0, flexDirection: 'row' } as object}>
             <Pressy onPress={prev} style={{ flex: 1 }} scale={1} accessibilityLabel="Anterior"><View style={{ flex: 1 }} /></Pressy>
             <Pressy onPress={next} style={{ flex: 2 }} scale={1} accessibilityLabel="Siguiente"><View style={{ flex: 1 }} /></Pressy>
           </View>
-          {linkUrl && <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + (business ? 96 : 40) + (current.kind !== 'text' && current.body ? 78 : 0), zIndex: 3 }}><LinkCard url={linkUrl} dark /></View>}
+          {linkUrl && <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + (business ? 96 : mine ? 40 : 84) + (current.kind !== 'text' && current.body ? 78 : 0), zIndex: 3 }}><LinkCard url={linkUrl} dark /></View>}
 
 
-          <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 12, gap: 10 }} pointerEvents="box-none">
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 4, paddingTop: insets.top + 10, paddingHorizontal: 12, gap: 10 }} pointerEvents="box-none">
             <View style={{ flexDirection: 'row', gap: 4 }}>
               {items.map((s, i) => (
                 <View key={s.id} style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.35)', overflow: 'hidden' }}>
@@ -95,10 +124,38 @@ export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onC
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Txt v="smallStrong" style={{ color: '#fff' }}>{mine && !business ? 'Mi estado' : name}</Txt>{business && <Icon name="storefront" size={13} color="#FFD98A" />}</View>
                 <Txt v="caption" style={{ color: 'rgba(255,255,255,0.75)' }}>{isVideo ? t('{when} · vídeo', { when: relative(current.created_at) }) : relative(current.created_at)}</Txt>
               </View>
-              {mine && onDelete && <IconButton icon="trash" label={business ? 'Eliminar publicación' : 'Eliminar estado'} size={40} onPress={() => { onDelete(current); if (items.length === 1) onClose(); else next(); }} />}
-              <IconButton icon="close" label="Cerrar" size={40} onPress={onClose} />
+              {mine && onDelete && (
+                <Pressy onPress={removeCurrent} accessibilityRole="button" accessibilityLabel={business ? 'Eliminar publicación' : 'Eliminar estado'} scale={0.94} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 18, backgroundColor: confirmDel ? '#D8503F' : 'rgba(255,255,255,0.18)' }}>
+                  <Icon name="trash" size={16} color="#fff" /><Txt v="caption" style={{ color: '#fff' }}>{delBusy ? '…' : confirmDel ? t('¿Seguro? Toca otra vez') : t('Eliminar')}</Txt>
+                </Pressy>
+              )}
+              <IconButton icon="close" label="Cerrar" size={40} glass onPress={onClose} />
             </View>
+            {delError && <View style={{ marginTop: 8, alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: 'rgba(216,80,63,0.92)' }}><Txt v="caption" style={{ color: '#fff' }}>{delError}</Txt></View>}
           </View>
+
+          {!business && !mine && onReply && (
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 6 }} pointerEvents="box-none">
+              <View style={{ paddingHorizontal: 14, paddingBottom: insets.bottom + 12, gap: 8 }} pointerEvents="box-none">
+                {replyNote && <View style={{ alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: replyNote.ok ? 'rgba(31,166,122,0.95)' : 'rgba(216,80,63,0.95)' }}><Txt v="caption" style={{ color: '#fff' }}>{replyNote.text}</Txt></View>}
+                {typing && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+                    {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((e) => (
+                      <Pressy key={e} onPress={() => sendReply(e)} accessibilityRole="button" accessibilityLabel={t('Reaccionar {emoji}', { emoji: e })} scale={0.85} style={{ width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)' }}>
+                        <Txt style={{ fontSize: 22, lineHeight: 28 }}>{e}</Txt>
+                      </Pressy>
+                    ))}
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TextInput value={reply} onChangeText={setReply} placeholder={t('Responder a {name}…', { name })} placeholderTextColor="rgba(255,255,255,0.65)" maxLength={500} returnKeyType="send" onSubmitEditing={() => sendReply(reply)} accessibilityLabel={t('Responder a {name}…', { name })}
+                    onFocus={() => { setTyping(true); anim.current?.stop(); }} onBlur={() => { setTyping(false); resumeRef.current(); }}
+                    style={{ flex: 1, height: 46, borderRadius: 23, paddingHorizontal: 18, color: '#fff', fontSize: 16, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)', outlineStyle: 'none' } as object} />
+                  {reply.trim().length > 0 && <IconButton icon="send" label="Enviar" size={46} onPress={() => sendReply(reply)} />}
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          )}
 
           {business && !mine && (
             <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 24, flexDirection: 'row', gap: 10 }} pointerEvents="box-none">

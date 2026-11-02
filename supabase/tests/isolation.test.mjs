@@ -1072,5 +1072,57 @@ await check('Cobros: el plan solo lo leen propietario/admin y solo lo escribe el
   await as(outsider, async () => denied(db.query(`insert into public.business_billing (business_id) values ($1)`, [biz.id]), 'outsider cannot insert'));
 });
 
+await db.exec(migration('20261110_000023_audience_tone_overlap_reactions.sql'));
+await db.exec(migration('20261110_000023_audience_tone_overlap_reactions.sql'));
+await check('Citas: no se puede reservar dos veces el mismo horario', async () => {
+  const [{ id: biz }] = await q(`insert into public.businesses (owner_id, name) values ($1, 'Solapes SL') returning id`, [ids.dani]);
+  const T = (h) => `2030-05-01T${String(h).padStart(2, '0')}:00:00Z`;
+  const add = (start, end, extra = {}) => db.query(`insert into public.appointments (business_id, title, starts_at, ends_at, status, assigned_to, customer_user_id) values ($1, 'x', $2, $3, $4, $5, $6)`, [biz, T(start), T(end), extra.status ?? 'scheduled', extra.assigned ?? null, extra.cu ?? null]);
+  await add(10, 11);                                           // first booking
+  await denied(add(10, 11), 'same slot, nobody assigned');
+  await denied(add(10.5 | 0, 12), 'overlapping start');         // 10:00-12:00 overlaps 10:00-11:00
+  await add(11, 12);                                           // back to back is fine
+  await add(10, 11, { status: 'cancelled' });                  // cancelled bookings do not block
+  await add(13, 14, { assigned: ids.ana });
+  await add(13, 14, { assigned: ids.ben });                    // two different people at once: fine
+  await denied(add(13, 14, { assigned: ids.ana }), 'same person twice');
+  await add(15, 16, { assigned: ids.ana, cu: ids.cleo });
+  await denied(add(15, 16, { assigned: ids.ben, cu: ids.cleo }), 'same customer in two places');
+  const [{ id: moved }] = await q(`insert into public.appointments (business_id, title, starts_at, ends_at, status) values ($1, 'y', $2, $3, 'cancelled') returning id`, [biz, T(10), T(11)]);
+  await denied(db.query(`update public.appointments set status = 'scheduled' where id = $1`, [moved]), 'reopening a cancelled one into a taken slot');
+});
+await check('Reacciones: solo las seis del selector', async () => {
+  const [{ id: mid }] = await q(`select id from public.messages limit 1`);
+  await q(`delete from public.message_reactions where message_id = $1 and user_id = $2`, [mid, ids.dani]);
+  await denied(db.query(`insert into public.message_reactions (message_id, user_id, emoji) values ($1, $2, $3)`, [mid, ids.dani, 'x']), 'arbitrary text');
+  await denied(db.query(`insert into public.message_reactions (message_id, user_id, emoji) values ($1, $2, $3)`, [mid, ids.dani, String.fromCodePoint(0x1F346)]), 'emoji outside the set');
+  for (const e of [String.fromCodePoint(0x1F44D), '\u2764\uFE0F', String.fromCodePoint(0x1F602), String.fromCodePoint(0x1F62E), String.fromCodePoint(0x1F622), String.fromCodePoint(0x1F64F)]) {
+    await q(`delete from public.message_reactions where message_id = $1 and user_id = $2`, [mid, ids.dani]);
+    await db.query(`insert into public.message_reactions (message_id, user_id, emoji) values ($1, $2, $3)`, [mid, ids.dani, e]);
+  }
+  await q(`delete from public.message_reactions where message_id = $1 and user_id = $2`, [mid, ids.dani]);
+});
+await check('Estados: quien puede verlos (todos / todos menos / solo con)', async () => {
+  const withChat = async (a, b) => { await as(a, async () => q(`select public.start_direct_chat($1)`, [ids[b]])); };
+  await withChat('ana', 'ben'); await withChat('ana', 'cleo');
+  const post = async (mode, list) => as('ana', async () => (await q(`insert into public.statuses (user_id, kind, body, audience_mode, audience_ids) values ($1, 'text', $2, $3, $4) returning id`, [ids.ana, `aud-${mode}`, mode, list]))[0].id);
+  const sees = async (who, id) => (await as(who, async () => q(`select 1 from public.statuses where id = $1`, [id]))).length === 1;
+  const all = await post('all', []);
+  const only = await post('only', [ids.cleo]);
+  const except = await post('except', [ids.cleo]);
+  eq([await sees('ben', all), await sees('cleo', all), await sees('ana', all)], [true, true, true], 'all');
+  eq([await sees('ben', only), await sees('cleo', only), await sees('ana', only)], [false, true, true], 'only');
+  eq([await sees('ben', except), await sees('cleo', except), await sees('ana', except)], [true, false, true], 'except');
+  await denied(as('ana', async () => db.query(`insert into public.statuses (user_id, kind, body, audience_mode) values ($1, 'text', 'x', 'everyone-else')`, [ids.ana])), 'invalid mode');
+});
+await check('Negocio: el tono de fondo lo cambian los gestores', async () => {
+  const [{ id: biz }] = await q(`select id from public.businesses where name = 'Solapes SL'`);
+  await as('dani', async () => { await q(`update public.businesses set surface_tone = 'sky' where id = $1`, [biz]); });
+  eq((await q(`select surface_tone from public.businesses where id = $1`, [biz]))[0].surface_tone, 'sky');
+  await as('ben', async () => { await fails(db.query(`update public.businesses set surface_tone = 'rose' where id = $1`, [biz])); });
+  eq((await q(`select surface_tone from public.businesses where id = $1`, [biz]))[0].surface_tone, 'sky', 'outsider cannot change it');
+  await denied(db.query(`update public.businesses set surface_tone = 'neon' where id = $1`, [biz]), 'unknown tone');
+});
+
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);
