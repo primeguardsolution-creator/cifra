@@ -14,6 +14,8 @@ import { FlyAvatar } from '../../../features/chat/FlyAvatar';
 import { ReportSheet, UnknownContactBar, useIsContact } from '../../../features/chat/UnknownContact';
 import { VideoModal } from '../../../features/chat/VideoPlayer';
 import { DocViewer } from '../../../features/files/DocViewer';
+import { ActionBar } from '../../../features/chat/ActionBar';
+import { ChatAction, actionsFor } from '../../../lib/actions';
 import { LocationSheet } from '../../../features/location/LocationSheet';
 import { encodeLocation, geoSupported } from '../../../lib/geo';
 import { isViewable } from '../../../lib/fileKind';
@@ -34,7 +36,7 @@ import { IncognitoTheme, useTheme } from '../../../theme/ThemeProvider';
 import { font } from '../../../theme/tokens';
 import { Avatar, EmptyState, Icon, IconButton, Pressy, Sheet, SheetRow, Txt, TypingDots, useToast } from '../../../ui';
 import { hapticSoft } from '../../../lib/haptics';
-import { loc, t } from '../../../i18n';
+import { loc, t, tr } from '../../../i18n';
 
 type Row = { type: 'msg'; m: Message; joinedOlder: boolean; joinedNewer: boolean } | { type: 'day'; label: string; key: string };
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -88,6 +90,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   const [viewer, setViewer] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(null);
   const [locOpen, setLocOpen] = useState(false);
+  const [bizActions, setBizActions] = useState<ChatAction[]>([]);
   const [doc, setDoc] = useState<{ url: string; name: string; mime: string | null; size: number | null } | null>(null);
   const [menu, setMenu] = useState(false);
   const [statePicker, setStatePicker] = useState(false);
@@ -189,6 +192,17 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
 
   const callable = call.supported && !!chat && !blocked && !incognito && (chat.kind === 'group' || (chat.kind === 'direct' && !!chat.peer_id) || (chat.kind === 'business' && (chat.perspective === 'agent' ? !!chat.peer_id : true)));
   /** One button for every kind of chat: 1:1, group (everyone in the room rings) and business (customer rings the front desk). */
+  // Customer view of a business chat: the business's quick-action buttons above the message box.
+  const customerOfBusiness = chat?.kind === 'business' && chat.perspective === 'personal' && !!chat.business_id;
+  useEffect(() => { if (customerOfBusiness && chat?.business_id) actionsFor(chat.business_id).then(setBizActions).catch(() => setBizActions([])); else setBizActions([]); }, [customerOfBusiness, chat?.business_id]);
+  const runAction = (a: ChatAction) => {
+    if (a.url) { Linking.openURL(a.url); return; }
+    const bid = chat?.business_id; if (!bid) return;
+    if (a.type === 'appointment') router.push({ pathname: '/b/[id]', params: { id: bid, book: '1' } });
+    else if (a.type === 'catalog') router.push({ pathname: '/b/[id]', params: { id: bid } });
+    else if (a.type === 'call') startChatCall('audio');
+    else if (a.type === 'human') guard(() => conv.send({ body: tr('🙋 Quiero hablar con una persona') }));
+  };
   const startChatCall = async (kind: 'audio' | 'video') => {
     if (!chat) return;
     try {
@@ -291,6 +305,7 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
       {showUnknown && chat && directPeer && (
         <UnknownContactBar me={me} peerId={directPeer} peerName={chatTitle(chat)} peerPhone={chat.peer_phone} conversationId={id} onAdded={() => { setKnown(true); refresh(); }} onBlocked={() => setBlocked(true)} />
       )}
+      {customerOfBusiness && !blocked && <ActionBar actions={bizActions.filter((a) => a.type !== 'call' || a.url || call.supported)} onAction={runAction} />}
       {chat && (
         <Composer
           agent={agent} quickReplies={quickReplies} disabledReason={disabledReason} autoFocus={wide}
