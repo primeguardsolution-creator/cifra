@@ -1436,4 +1436,8 @@ export const rows: [string, string, string][] = [
   ["Menta", "Mint", "Minze"],
   ["Pizarra", "Slate", "Schiefer"],
   ["editado", "edited", "bearbeitet"],
+  ["Estado", "Status", "Status"],
+  ["Respuesta enviada", "Reply sent", "Antwort gesendet"],
+  ["No se pudo enviar la respuesta.", "Could not send the reply.", "Antwort konnte nicht gesendet werden."],
+  ["Responder a {name}…", "Reply to {name}…", "Antworte {name}…"],
 ];

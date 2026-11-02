@@ -6,14 +6,14 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PostComposer } from '../../features/status/PostComposer';
 import { StatusViewer } from '../../features/status/StatusViewer';
-import { PersonCard, StatusRow, deleteStatus, getProfiles, listBusinessPosts, listStatuses } from '../../lib/api';
+import { PersonCard, StatusRow, deleteStatus, getProfiles, listBusinessPosts, listStatuses, sendMessage, startDirectChat } from '../../lib/api';
 import { friendly } from '../../lib/errors';
-import { relative } from '../../lib/format';
+import { relative, uuid } from '../../lib/format';
 import { useAuth } from '../../state/AuthProvider';
 import { useChats } from '../../state/ChatsProvider';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Avatar, EmptyState, Icon, IconButton, Pressy, Txt, useToast } from '../../ui';
-import { t } from '../../i18n';
+import { t, tr } from '../../i18n';
 
 type Biz = { id: string; name: string; logo: string | null; handle: string | null };
 
@@ -127,7 +127,13 @@ export default function Updates() {
         name={viewingBiz ? viewingBiz.name : viewing?.id === user?.id ? profile?.display_name ?? '' : viewingPerson?.display_name ?? ''}
         avatarPath={viewingBiz ? viewingBiz.logo : viewing?.id === user?.id ? profile?.avatar_path : viewingPerson?.avatar_path}
         seed={viewing?.id ?? ''} mine={viewing?.kind === 'person' && viewing.id === user?.id} business={viewingBiz ? { id: viewingBiz.id, handle: viewingBiz.handle } : null} onClose={() => setViewing(null)}
-        onDelete={async (s) => { await deleteStatus(s.id); await load(); }} />
+        onDelete={async (s) => { await deleteStatus(s.id); await load(); }}
+        onReply={async (s, text) => {
+          if (!user) return;
+          const cid = await startDirectChat(s.user_id);
+          const quote = s.body?.trim() ? `«${s.body.trim().slice(0, 80)}${s.body.trim().length > 80 ? '…' : ''}»` : s.kind === 'video' ? tr('🎬 Vídeo') : tr('📷 Foto');
+          await sendMessage({ id: uuid(), conversation_id: cid, sender_id: user.id, body: `↩️ ${tr('Estado')}: ${quote}\n${text}` });
+        }} />
     </View>
   );
 }
