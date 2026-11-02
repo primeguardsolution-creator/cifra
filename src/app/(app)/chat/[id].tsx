@@ -35,6 +35,7 @@ import { useConversation } from '../../../features/chat/useConversation';
 import { useAuth } from '../../../state/AuthProvider';
 import { useChats } from '../../../state/ChatsProvider';
 import { useSpace } from '../../../state/SpaceProvider';
+import { ScreenGuard } from '../../../features/chat/ScreenGuard';
 import { IncognitoTheme, useTheme } from '../../../theme/ThemeProvider';
 import { font } from '../../../theme/tokens';
 import { Avatar, EmptyState, Icon, IconButton, Pressy, Sheet, SheetRow, Txt, TypingDots, useToast } from '../../../ui';
@@ -60,7 +61,7 @@ function ChatInner({ id, me, jumpTo }: { id: string; me: string; jumpTo?: string
   const back = () => { refresh(); router.replace('/chats'); };
   if (conv.destroyed) return <IncognitoTheme><IncognitoGone onBack={back} /></IncognitoTheme>;
   const body = <ChatBody id={id} me={me} jumpToParam={jumpTo} conv={conv} />;
-  return conv.chat?.incognito ? <IncognitoTheme>{body}</IncognitoTheme> : body;
+  return conv.chat?.incognito ? <IncognitoTheme><ScreenGuard>{body}</ScreenGuard></IncognitoTheme> : body;
 }
 
 function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpToParam?: string; conv: Conv }) {

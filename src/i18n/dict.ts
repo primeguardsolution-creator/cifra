@@ -1581,4 +1581,7 @@ export const rows: [string, string, string][] = [
   ["Lugar (opcional)", "Place (optional)", "Ort (optional)"],
   ["Calle Mayor 1, o un enlace de videollamada", "123 Main St, or a video call link", "Hauptstraße 1 oder ein Videoanruf-Link"],
   ["Enviar evento", "Send event", "Ereignis senden"],
+  ["Nice try 😏", "Nice try 😏", "Netter Versuch 😏"],
+  ["Esto es incógnito. Aquí no se guardan capturas: lo que se dice aquí, se queda aquí.", "This is incognito. No screenshots here: what's said here, stays here.", "Das ist Inkognito. Hier gibt es keine Screenshots: Was hier gesagt wird, bleibt hier."],
+  ["Volver al chat", "Back to chat", "Zurück zum Chat"],
 ];
