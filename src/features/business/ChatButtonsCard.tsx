@@ -43,7 +43,8 @@ export function ChatButtonsCard({ businessId }: { businessId: string }) {
               <IconButton icon="chevron-down" label="Bajar" size={32} onPress={() => move(i, 1)} />
               <Toggle value={a.enabled !== false} label={tr('Mostrar')} onChange={(v) => set(i, { enabled: v })} />
             </View>
-            <Field label="Texto del botón" value={a.label} onChangeText={(v) => set(i, { label: v })} maxLength={40} />
+            {/* Default labels are stored in Spanish and shown in the app language; once you type your own text it is kept as typed. */}
+            <Field label="Texto del botón" value={a.label === ACTION_META[a.type].name ? tr(a.label) : a.label} onChangeText={(v) => set(i, { label: v === tr(ACTION_META[a.type].name) ? ACTION_META[a.type].name : v })} maxLength={40} />
             <Field label={a.type === 'link' ? 'URL (obligatoria)' : 'URL (opcional)'} value={a.url ?? ''} onChangeText={(v) => set(i, { url: v })} placeholder={a.type === 'call' ? 'tel:+34600123456' : 'https://…'} autoCapitalize="none" keyboardType="url"
               error={!validActionUrl(a.url ?? '') ? 'Usa https://, tel: o mailto:' : undefined} />
             {a.type === 'link' && <Button title="Quitar este botón" variant="soft" size="sm" icon="trash" onPress={() => setList((cur) => cur?.filter((_, j) => j !== i) ?? cur)} />}
