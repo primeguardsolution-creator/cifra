@@ -69,13 +69,13 @@ export default function BusinessProfile() {
   const saveCover = async (path: string | null) => { if (!biz) return; await updateBusiness(biz.id, { cover_path: path }); setBiz({ ...biz, cover_path: path }); };
   const message = async () => {
     if (!biz) return; setBusy(true);
-    try { const cid = await startBusinessChat(biz.id); router.replace({ pathname: '/chat/[id]', params: { id: cid } }); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); }
+    try { const cid = await startBusinessChat(biz.id); router.dismissTo({ pathname: '/chat/[id]', params: { id: cid } }); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); }
   };
   // "Escribir" from a post in the viewer lands here with ?chat=1: go straight to the conversation.
   useEffect(() => { if (chat === '1' && biz && !own) message(); }, [chat, biz?.id, own]); // eslint-disable-line react-hooks/exhaustive-deps
   const sendRequest = async () => {
     if (!biz || !slot) return; setBusy(true);
-    try { await requestAppointment(biz.id, slot, note); setReqOpen(false); toast.show('Cita solicitada. Te avisarán por el chat.', 'success'); const cid = await startBusinessChat(biz.id); router.replace({ pathname: '/chat/[id]', params: { id: cid } }); }
+    try { await requestAppointment(biz.id, slot, note); setReqOpen(false); toast.show('Cita solicitada. Te avisarán por el chat.', 'success'); const cid = await startBusinessChat(biz.id); router.dismissTo({ pathname: '/chat/[id]', params: { id: cid } }); }
     catch (e) { toast.show(friendly(e, 'No se pudo solicitar la cita.'), 'error'); } finally { setBusy(false); }
   };
   const back = () => (router.canGoBack() ? router.back() : router.replace('/chats'));
@@ -145,7 +145,7 @@ export default function BusinessProfile() {
         </View>
       </ScrollView>
       {biz && <StatusViewer visible={viewing !== null && posts.length > 0} items={viewing === null ? [] : [...posts.slice(viewing), ...posts.slice(0, viewing)]} name={biz.name} avatarPath={biz.logo_path} seed={biz.id} mine={own} business={{ id: biz.id, handle: biz.handle }} onClose={() => setViewing(null)}
-        onDelete={own ? async (s) => { try { await deleteStatus(s.id); setPosts((p) => p.filter((x) => x.id !== s.id)); } catch (e) { toast.show(friendly(e), 'error'); } } : undefined} />}
+        onDelete={own ? async (s) => { await deleteStatus(s.id); setPosts((p) => p.filter((x) => x.id !== s.id)); } : undefined} />}
       <Sheet visible={reqOpen} onClose={() => setReqOpen(false)} title="Solicitar una cita">
         <Txt v="small" tone="muted" style={{ marginBottom: 10 }}>Elige el día y la hora que prefieras. {biz?.name} la confirmará por el chat.</Txt>
         <SlotPicker value={slot} onChange={setSlot} />

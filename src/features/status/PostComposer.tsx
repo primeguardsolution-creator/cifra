@@ -2,7 +2,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { Image, KeyboardAvoidingView, Modal, Platform, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BUSINESS_POST_DAYS, StatusKind, postStatus } from '../../lib/api';
+import { Audience, BUSINESS_POST_DAYS, StatusKind, postStatus } from '../../lib/api';
+import { ALL_AUDIENCE, AudienceSheet, audienceLabel, loadAudience, saveAudience } from './AudienceSheet';
 import { friendly } from '../../lib/errors';
 import { bytes } from '../../lib/format';
 import { Picked, pickHdPhoto, pickVideo, uploadMedia } from '../../lib/media';
@@ -38,7 +39,9 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
   const [caption, setCaption] = useState('');
   const [posting, setPosting] = useState(false);
   const [prep, setPrep] = useState<{ file: Picked; info: VideoInfo } | null>(null);
-  useEffect(() => { if (visible) { setStep('choose'); setText(''); setCaption(''); setFile(null); } }, [visible]);
+  const [audience, setAudience] = useState<Audience>(ALL_AUDIENCE);
+  const [audOpen, setAudOpen] = useState(false);
+  useEffect(() => { if (visible) { setStep('choose'); setText(''); setCaption(''); setFile(null); if (!businessId) loadAudience().then(setAudience); } }, [visible, businessId]);
   const biz = !!businessId;
   const folder = biz ? `status/biz/${businessId}` : `status/${me}`;
 
@@ -59,10 +62,10 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
     if (posting) return;
     setPosting(true);
     try {
-      if (kind === 'text') await postStatus(me, { kind, body: text.trim(), bg, business_id: businessId ?? null });
+      if (kind === 'text') await postStatus(me, { kind, body: text.trim(), bg, business_id: businessId ?? null, audience });
       else {
         const path = await uploadMedia('chat-media', folder, file!);
-        await postStatus(me, { kind, media_path: path, body: caption.trim() || undefined, business_id: businessId ?? null });
+        await postStatus(me, { kind, media_path: path, body: caption.trim() || undefined, business_id: businessId ?? null, audience });
       }
       toast.show(biz ? t('Publicado · visible {n} días en tu perfil y en Estados', { n: BUSINESS_POST_DAYS }) : 'Estado publicado', 'success');
       onPosted(); onClose();
@@ -71,12 +74,15 @@ export function PostComposer({ visible, onClose, me, businessId, onPosted }: Pro
 
   return (
     <>
-      <Sheet visible={visible && step === 'choose'} onClose={onClose} title={biz ? 'Nueva publicación' : 'Nuevo estado'}>
+      <Sheet visible={visible && step === 'choose' && !audOpen} onClose={onClose} title={biz ? 'Nueva publicación' : 'Nuevo estado'}>
         {biz && <Txt v="small" tone="muted" style={{ marginBottom: 6 }}>{t('Lo verán tus clientes en Estados y cualquiera que abra tu perfil público. Dura {n} días.', { n: BUSINESS_POST_DAYS })}</Txt>}
+        {!biz && <SheetRow icon="eye" label="Quién puede verlo" sub={audienceLabel(audience)} onPress={() => setAudOpen(true)} />}
         <SheetRow icon="text" label="Texto" sub="Escribe algo sobre un fondo de color" onPress={() => setStep('text')} />
         <SheetRow icon="images" label="Foto" sub={biz ? 'Producto, local, equipo… con un pie de foto' : 'Elige una imagen de tu galería'} onPress={() => pick('image')} />
         <SheetRow icon="videocam" label="Vídeo" sub="Hasta 90 segundos · se recorta y comprime si hace falta" onPress={() => pick('video')} />
       </Sheet>
+
+      <AudienceSheet visible={visible && audOpen} value={audience} onClose={() => setAudOpen(false)} onChange={(a) => { setAudience(a); saveAudience(a); }} />
 
       <VideoPrep visible={visible && step === 'prep' && !!prep} file={prep?.file ?? null} info={prep?.info ?? null} onClose={() => { setPrep(null); setStep('choose'); }} onDone={(f) => { setPrep(null); setFile(f); setStep('media'); }} />
 

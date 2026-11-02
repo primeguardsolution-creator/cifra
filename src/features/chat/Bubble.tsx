@@ -138,7 +138,7 @@ function BubbleBase(p: BubbleProps) {
               <Txt style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 15, lineHeight: 20, color: p.isCustomer ? c.text : c.highlight }}>{name}</Txt>
               {p.isCustomer && <View style={{ paddingHorizontal: 5, height: 16, borderRadius: 3, backgroundColor: c.sunken, justifyContent: 'center' }}><Txt style={{ fontFamily: 'GeistMono_500Medium', fontSize: 9, color: c.textMuted }}>CLIENTE</Txt></View>}
               <Txt v="mono" tone="faint">{messageTime(m.created_at)}</Txt>
-              {m.edited_at && !deleted && <Txt v="caption" tone="faint">(editado)</Txt>}
+              {m.edited_at && !deleted && <Txt v="caption" tone="faint">({t('editado')})</Txt>}
               {m.is_automated && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="flash" size={10} color={c.highlight} /><Txt v="mono" tone="faint">AUTOMÁTICO</Txt></View>}
               {m.is_broadcast && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Icon name="megaphone" size={10} color={c.highlight} /><Txt v="mono" tone="faint">DIFUSIÓN</Txt></View>}
             </View>
@@ -227,7 +227,7 @@ function BubbleBase(p: BubbleProps) {
           {m.is_broadcast && !mine && p.onBroadcastOptOut && !deleted && <Pressy onPress={p.onBroadcastOptOut} accessibilityRole="button" scale={0.97} style={{ marginTop: 6, alignSelf: 'flex-start' }}><Txt v="caption" style={{ color: c.accent, textDecorationLine: 'underline' }}>No recibir más difusiones de este negocio</Txt></Pressy>}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 3 }}>
             {p.starred && <Icon name="star" size={11} color={mine && !incognito ? '#F6D77A' : c.warning} />}
-            {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>editado</Txt>}
+            {m.edited_at && !deleted && <Txt v="caption" style={{ color: meta, fontSize: 11 }}>{t('editado')}</Txt>}
             <Txt v="mono" style={{ color: meta, fontSize: 10 }}>{messageTime(m.created_at)}</Txt>
             {mine && !deleted && !internal && (m.pending ? <Icon name="time-outline" size={13} color={meta} /> : m.failed ? <Icon name="alert-circle" size={14} color={c.danger} /> : <Icon name={p.read || p.delivered ? 'checkmark-done' : 'checkmark'} size={15} color={p.read && !incognito ? '#7CF0C4' : meta} />)}
           </View>

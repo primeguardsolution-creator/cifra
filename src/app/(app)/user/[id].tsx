@@ -42,7 +42,7 @@ export default function UserProfile() {
   }, [id]);
 
   const back = () => (router.canGoBack() ? router.back() : router.replace('/chats'));
-  const message = async () => { setBusy(true); try { const cid = await startDirectChat(id); router.replace({ pathname: '/chat/[id]', params: { id: cid } }); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); } };
+  const message = async () => { setBusy(true); try { const cid = await startDirectChat(id); router.dismissTo({ pathname: '/chat/[id]', params: { id: cid } }); } catch (e) { toast.show(friendly(e), 'error'); } finally { setBusy(false); } };
   const mine = user?.id === id;
   const since = p?.created_at ? new Date(p.created_at).toLocaleDateString(loc(), { month: 'long', year: 'numeric' }) : null;
 

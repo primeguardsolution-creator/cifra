@@ -127,7 +127,7 @@ export default function Updates() {
         name={viewingBiz ? viewingBiz.name : viewing?.id === user?.id ? profile?.display_name ?? '' : viewingPerson?.display_name ?? ''}
         avatarPath={viewingBiz ? viewingBiz.logo : viewing?.id === user?.id ? profile?.avatar_path : viewingPerson?.avatar_path}
         seed={viewing?.id ?? ''} mine={viewing?.kind === 'person' && viewing.id === user?.id} business={viewingBiz ? { id: viewingBiz.id, handle: viewingBiz.handle } : null} onClose={() => setViewing(null)}
-        onDelete={async (s) => { try { await deleteStatus(s.id); await load(); } catch (e) { toast.show(friendly(e), 'error'); } }} />
+        onDelete={async (s) => { await deleteStatus(s.id); await load(); }} />
     </View>
   );
 }

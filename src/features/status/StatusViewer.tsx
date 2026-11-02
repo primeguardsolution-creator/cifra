@@ -4,6 +4,7 @@ import { createElement, useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Image, Linking, Modal, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusRow } from '../../lib/api';
+import { friendly } from '../../lib/errors';
 import { relative } from '../../lib/format';
 import { signedMediaUrl } from '../../lib/media';
 import { LinkCard } from '../../components/LinkCard';
@@ -13,7 +14,7 @@ import { Avatar, Icon, IconButton, Pressy, Txt } from '../../ui';
 import { t } from '../../i18n';
 
 type Props = {
-  visible: boolean; items: StatusRow[]; name: string; avatarPath?: string | null; seed: string; mine?: boolean; onClose: () => void; onDelete?: (s: StatusRow) => void;
+  visible: boolean; items: StatusRow[]; name: string; avatarPath?: string | null; seed: string; mine?: boolean; onClose: () => void; /** Must throw when the deletion fails: the viewer shows the error itself (toasts sit behind a full-screen modal). */ onDelete?: (s: StatusRow) => Promise<void> | void;
   /** Business posts: show the storefront badge and a "Escribir" call to action that opens the public profile. */
   business?: { id: string; handle?: string | null } | null;
 };
@@ -24,6 +25,17 @@ const MAX_VIDEO = 90_000;
 export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onClose, onDelete, business }: Props) {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+  const [delError, setDelError] = useState<string | null>(null);
+  useEffect(() => { setConfirmDel(false); setDelError(null); }, [index, visible]);
+  useEffect(() => { if (!confirmDel) return; const tm = setTimeout(() => setConfirmDel(false), 4000); return () => clearTimeout(tm); }, [confirmDel]);
+  const removeCurrent = async () => {
+    if (!onDelete || delBusy) return;
+    if (!confirmDel) { setConfirmDel(true); return; }
+    setDelBusy(true); setDelError(null);
+    try { await onDelete(items[index]); setConfirmDel(false); if (items.length <= 1) onClose(); } catch (e) { setDelError(friendly(e, 'No se pudo eliminar.')); } finally { setDelBusy(false); }
+  };
   const [media, setMedia] = useState<string | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
   const anim = useRef<Animated.CompositeAnimation | null>(null);
@@ -95,9 +107,14 @@ export function StatusViewer({ visible, items, name, avatarPath, seed, mine, onC
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Txt v="smallStrong" style={{ color: '#fff' }}>{mine && !business ? 'Mi estado' : name}</Txt>{business && <Icon name="storefront" size={13} color="#FFD98A" />}</View>
                 <Txt v="caption" style={{ color: 'rgba(255,255,255,0.75)' }}>{isVideo ? t('{when} · vídeo', { when: relative(current.created_at) }) : relative(current.created_at)}</Txt>
               </View>
-              {mine && onDelete && <IconButton icon="trash" label={business ? 'Eliminar publicación' : 'Eliminar estado'} size={40} onPress={() => { onDelete(current); if (items.length === 1) onClose(); else next(); }} />}
+              {mine && onDelete && (
+                <Pressy onPress={removeCurrent} accessibilityRole="button" accessibilityLabel={business ? 'Eliminar publicación' : 'Eliminar estado'} scale={0.94} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 18, backgroundColor: confirmDel ? '#D8503F' : 'rgba(255,255,255,0.18)' }}>
+                  <Icon name="trash" size={16} color="#fff" /><Txt v="caption" style={{ color: '#fff' }}>{delBusy ? '…' : confirmDel ? t('¿Seguro? Toca otra vez') : t('Eliminar')}</Txt>
+                </Pressy>
+              )}
               <IconButton icon="close" label="Cerrar" size={40} onPress={onClose} />
             </View>
+            {delError && <View style={{ marginTop: 8, alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: 'rgba(216,80,63,0.92)' }}><Txt v="caption" style={{ color: '#fff' }}>{delError}</Txt></View>}
           </View>
 
           {business && !mine && (

@@ -42,7 +42,7 @@ export type QuickReply = { id: string; business_id: string; shortcut: string; bo
 export type ContactRow = { id: string; display_name: string; phone: string | null; contact_user_id: string | null };
 export type StatusKind = 'text' | 'image' | 'video';
 /** A status (24 h, personal) or a business post (`business_id` set, up to 7 days, public feed). */
-export type StatusRow = { id: string; user_id: string; kind: StatusKind; body: string | null; bg: number; media_path: string | null; created_at: string; expires_at: string; business_id: string | null };
+export type StatusRow = { id: string; user_id: string; kind: StatusKind; body: string | null; bg: number; media_path: string | null; created_at: string; expires_at: string; business_id: string | null; audience_mode?: 'all' | 'except' | 'only'; audience_ids?: string[] };
 
 // ───────── Helpers ─────────
 export type PgError = { message: string } | null;
@@ -158,9 +158,15 @@ export async function listBusinessPosts(businessIds: string[]): Promise<StatusRo
   return unwrap(await supabase.from('statuses').select(statusCols).in('business_id', businessIds).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(200));
 }
 export const BUSINESS_POST_DAYS = 7;
-export const postStatus = async (me: string, s: { kind: StatusKind; body?: string; bg?: number; media_path?: string; business_id?: string | null }) =>
-  unwrap(await supabase.from('statuses').insert({ user_id: me, ...s, ...(s.business_id ? { expires_at: new Date(Date.now() + BUSINESS_POST_DAYS * 864e5).toISOString() } : {}) }));
-export const deleteStatus = async (id: string) => unwrap(await supabase.from('statuses').delete().eq('id', id));
+/** Who sees a personal status: everyone I chat with, all except some people, or only some people. */
+export type Audience = { mode: 'all' | 'except' | 'only'; ids: string[] };
+export const postStatus = async (me: string, s: { kind: StatusKind; body?: string; bg?: number; media_path?: string; business_id?: string | null; audience?: Audience }) =>
+  unwrap(await supabase.from('statuses').insert({ user_id: me, kind: s.kind, body: s.body, bg: s.bg, media_path: s.media_path, business_id: s.business_id, ...(s.audience && s.audience.mode !== 'all' && !s.business_id ? { audience_mode: s.audience.mode, audience_ids: s.audience.ids } : {}), ...(s.business_id ? { expires_at: new Date(Date.now() + BUSINESS_POST_DAYS * 864e5).toISOString() } : {}) }));
+/** Deletes one status / post. Fails loudly when nothing was deleted (no permission, or it no longer exists) instead of looking like it worked. */
+export const deleteStatus = async (id: string) => {
+  const rows = unwrap(await supabase.from('statuses').delete().eq('id', id).select('id')) as { id: string }[];
+  if (!rows.length) throw new Error('status_not_deleted');
+};
 
 // ───────── Business ─────────
 const businessCols = 'id, name, handle, description, category, email, phone, website, address, logo_path, cover_path, accent, greeting, away_message, away_enabled, is_public, owner_id, show_phone';
@@ -173,6 +179,12 @@ export const createBusiness = (v: { name: string; handle: string; category: stri
 export async function updateBusiness(id: string, patch: Partial<Omit<Business, 'id' | 'owner_id'>>) {
   return unwrap<Business>(await supabase.from('businesses').update(patch).eq('id', id).select(businessCols).single());
 }
+/** Background tone of a business workspace (own query: a missing column must never break loading the business). */
+export const getBusinessTone = async (id: string): Promise<string> => {
+  const { data, error } = await supabase.from('businesses').select('surface_tone').eq('id', id).maybeSingle();
+  return error ? 'default' : ((data as { surface_tone?: string } | null)?.surface_tone ?? 'default');
+};
+export const setBusinessTone = async (id: string, tone: string) => { unwrap(await supabase.from('businesses').update({ surface_tone: tone }).eq('id', id)); };
 export const listTeam = (businessId: string) => rpc<TeamMember[]>('list_business_team', { p_business: businessId });
 export const addTeamMember = (businessId: string, phone: string, role: BusinessRole) => rpc<string>('add_business_member', { p_business: businessId, p_phone: phone, p_role: role });
 export const setTeamRole = (businessId: string, userId: string, role: BusinessRole) => rpc<void>('set_business_member_role', { p_business: businessId, p_user: userId, p_role: role });

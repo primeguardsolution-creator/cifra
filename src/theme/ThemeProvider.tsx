@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform, useColorScheme } from 'react-native';
-import { AccentKey, BizAccentKey, Mode, Palette, Space, WallpaperKey, accentPatches, bizAccentPatches, incognitoPalettes, legacyBizAccent, legacyWallpaper, palettes } from './tokens';
+import { AccentKey, BizAccentKey, BizToneKey, Mode, Palette, Space, WallpaperKey, accentPatches, bizAccentPatches, bizTonePatches, incognitoPalettes, legacyBizAccent, legacyBizTone, legacyWallpaper, palettes } from './tokens';
 
 export type ModePreference = 'auto' | Mode;
 
@@ -16,6 +16,8 @@ type ThemeState = {
   setAccent: (a: AccentKey) => void;
   /** Colour of the active business (Business space only). Follows `businesses.accent`; SpaceProvider keeps it in sync. */
   bizAccent: BizAccentKey;
+  bizTone: BizToneKey;
+  setBizTone: (k: BizToneKey) => void;
   setBizAccent: (a: BizAccentKey) => void;
   /** Corner radius for the current space: soft in Personal, sharp in Business. */
   r: (n: number) => number;
@@ -33,6 +35,7 @@ const PREF_KEY = 'cifra.theme';
 const SPACE_KEY = 'cifra.space';
 const ACCENT_KEY = 'cifra.accent';
 const BIZ_ACCENT_KEY = 'cifra.bizAccent';
+const BIZ_TONE_KEY = 'cifra.bizTone';
 const WALL_KEY = 'cifra.wallpaper';
 const WALL_IMG_KEY = 'cifra.wallpaper.image';
 
@@ -42,11 +45,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [space, setSpaceState] = useState<Space>('personal');
   const [accent, setAccentState] = useState<AccentKey>('violet');
   const [bizAccent, setBizAccentState] = useState<BizAccentKey>('amber');
+  const [bizTone, setBizToneState] = useState<BizToneKey>('default');
   const [wallpaper, setWallpaperState] = useState<WallpaperKey>('cifra')
   const [wallpaperImage, setWallpaperImageState] = useState<string | null>(null);
 
   useEffect(() => {
-    AsyncStorage.multiGet([PREF_KEY, SPACE_KEY, ACCENT_KEY, WALL_KEY, WALL_IMG_KEY, BIZ_ACCENT_KEY]).then(([[, p], [, s], [, a], [, w], [, img], [, ba]]) => {
+    AsyncStorage.multiGet([PREF_KEY, SPACE_KEY, ACCENT_KEY, WALL_KEY, WALL_IMG_KEY, BIZ_ACCENT_KEY, BIZ_TONE_KEY]).then(([[, p], [, s], [, a], [, w], [, img], [, ba], [, bt]]) => {
+      if (bt) setBizToneState(legacyBizTone(bt));
       if (a && a in accentPatches) setAccentState(a as AccentKey);
       if (ba) setBizAccentState(legacyBizAccent(ba));
       if (w) setWallpaperState(legacyWallpaper(w));
@@ -61,11 +66,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setAccent = useCallback((a: AccentKey) => { setAccentState(a); AsyncStorage.setItem(ACCENT_KEY, a).catch(() => {}); }, []);
   const setBizAccent = useCallback((a: BizAccentKey) => { setBizAccentState((cur) => (cur === a ? cur : a)); AsyncStorage.setItem(BIZ_ACCENT_KEY, a).catch(() => {}); }, []);
+  const setBizTone = useCallback((k: BizToneKey) => { setBizToneState((cur) => (cur === k ? cur : k)); AsyncStorage.setItem(BIZ_TONE_KEY, k).catch(() => {}); }, []);
   const setWallpaper = useCallback((w: WallpaperKey) => { setWallpaperState(w); AsyncStorage.setItem(WALL_KEY, w).catch(() => {}); }, []);
   const setWallpaperImage = useCallback((uri: string | null) => { setWallpaperImageState(uri); (uri ? AsyncStorage.setItem(WALL_IMG_KEY, uri) : AsyncStorage.removeItem(WALL_IMG_KEY)).catch(() => {}); }, []);
 
   const mode: Mode = preference === 'auto' ? (system === 'dark' ? 'dark' : 'light') : preference;
-  const c = useMemo<Palette>(() => (space === 'personal' ? { ...palettes.personal[mode], ...accentPatches[accent][mode] } : { ...palettes.business[mode], ...bizAccentPatches[bizAccent][mode] }), [space, mode, accent, bizAccent]);
+  const c = useMemo<Palette>(() => (space === 'personal' ? { ...palettes.personal[mode], ...accentPatches[accent][mode] } : { ...palettes.business[mode], ...bizAccentPatches[bizAccent][mode], ...bizTonePatches[bizTone][mode] }), [space, mode, accent, bizAccent, bizTone]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
@@ -76,7 +82,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [c.bg, mode]);
 
   const r = useCallback((n: number) => (space === 'business' ? Math.max(3, Math.round(n * 0.3)) : n), [space]);
-  const value = useMemo(() => ({ c, mode, space, r, preference, setPreference, setSpace, accent, setAccent, bizAccent, setBizAccent, wallpaper, setWallpaper, wallpaperImage, setWallpaperImage, incognito: false }), [c, mode, space, r, preference, setPreference, setSpace, accent, setAccent, bizAccent, setBizAccent, wallpaper, setWallpaper, wallpaperImage, setWallpaperImage]);
+  const value = useMemo(() => ({ c, mode, space, r, preference, setPreference, setSpace, accent, setAccent, bizAccent, setBizAccent, bizTone, setBizTone, wallpaper, setWallpaper, wallpaperImage, setWallpaperImage, incognito: false }), [c, mode, space, r, preference, setPreference, setSpace, accent, setAccent, bizAccent, setBizAccent, bizTone, setBizTone, wallpaper, setWallpaper, wallpaperImage, setWallpaperImage]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

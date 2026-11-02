@@ -97,7 +97,7 @@ export default function Posts() {
 
       {user && <PostComposer visible={adding} onClose={() => setAdding(false)} me={user.id} businessId={active.business.id} onPosted={load} />}
       <StatusViewer visible={viewing !== null && list.length > 0} items={viewing === null ? [] : [...list.slice(viewing), ...list.slice(0, viewing)]} name={active.business.name} avatarPath={active.business.logo_path} seed={active.business.id} mine business={{ id: active.business.id, handle: active.business.handle }} onClose={() => setViewing(null)}
-        onDelete={async (s) => { try { await deleteStatus(s.id); await load(); toast.show('Publicación eliminada', 'success'); } catch (e) { toast.show(friendly(e), 'error'); } }} />
+        onDelete={async (s) => { await deleteStatus(s.id); await load(); }} />
     </View>
   );
 }

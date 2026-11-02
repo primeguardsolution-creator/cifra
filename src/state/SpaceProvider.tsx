@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { BusinessMembership, myBusinesses } from '../lib/api';
+import { BusinessMembership, getBusinessTone, myBusinesses } from '../lib/api';
 import { useTheme } from '../theme/ThemeProvider';
-import { Space, legacyBizAccent } from '../theme/tokens';
+import { Space, legacyBizAccent, legacyBizTone } from '../theme/tokens';
 import { markSpaceSwitch, useReducedMotion } from '../lib/motion';
 import { SpaceTransition } from '../components/SpaceTransition';
 import { useAuth } from './AuthProvider';
@@ -23,7 +23,7 @@ const ACTIVE_KEY = 'cifra.activeBusiness';
 
 export function SpaceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const { space, setSpace, setBizAccent } = useTheme();
+  const { space, setSpace, setBizAccent, setBizTone } = useTheme();
   const [businesses, setBusinesses] = useState<BusinessMembership[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -41,12 +41,18 @@ export function SpaceProvider({ children }: { children: React.ReactNode }) {
   // The Business space wears the colour of the active business, so switching businesses switches the whole workspace look.
   useEffect(() => { if (active) setBizAccent(legacyBizAccent(active.business.accent)); }, [active?.business.id, active?.business.accent, setBizAccent]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ...and its background tone, which the whole team shares.
+  useEffect(() => { if (active) getBusinessTone(active.business.id).then((k) => setBizTone(legacyBizTone(k))).catch(() => {}); }, [active?.business.id, setBizTone]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const reduced = useReducedMotion();
   const commit = useCallback((target: Space) => {
     markSpaceSwitch(target);
     setSpace(target);
     router.replace(target === 'business' ? '/inbox' : '/chats');
   }, [setSpace]);
+  // ...and its background tone, which the whole team shares.
+  useEffect(() => { if (active) getBusinessTone(active.business.id).then((k) => setBizTone(legacyBizTone(k))).catch(() => {}); }, [active?.business.id, setBizTone]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const switchSpace = useCallback((next?: Space) => {
     const target: Space = next ?? (space === 'personal' ? 'business' : 'personal');
     if (target === space || overlay) return;

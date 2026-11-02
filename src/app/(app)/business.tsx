@@ -7,8 +7,8 @@ import { PhoneField } from '../../components/PhoneField';
 import { CoverPicker, PhotoPicker } from '../../components/PhotoPicker';
 import { CoverImage } from '../../components/CoverImage';
 import { publicAvatarUrl } from '../../lib/media';
-import { bizAccentOptions } from '../../theme/tokens';
-import { BusinessRole, QuickReply, TeamMember, addQuickReply, addTeamMember, deleteQuickReply, listQuickReplies, listTeam, removeTeamMember, setTeamRole, updateBusiness } from '../../lib/api';
+import { bizAccentOptions, bizToneOptions } from '../../theme/tokens';
+import { BusinessRole, QuickReply, TeamMember, setBusinessTone, addQuickReply, addTeamMember, deleteQuickReply, listQuickReplies, listTeam, removeTeamMember, setTeamRole, updateBusiness } from '../../lib/api';
 import { canManage, categories, roleLabel, roleRank } from '../../lib/business';
 import { friendly } from '../../lib/errors';
 import { Country, countries, formatPhone, toE164 } from '../../lib/phone';
@@ -20,7 +20,7 @@ import { Avatar, Button, Card, Chip, Divider, EmptyState, Field, Icon, IconButto
 import { t, tr } from '../../i18n';
 
 export default function BusinessHub() {
-  const { c, r, setBizAccent } = useTheme();
+  const { c, r, mode, setBizAccent, bizTone, setBizTone } = useTheme();
   const { user } = useAuth();
   const { active, refreshBusinesses, switchSpace } = useSpace();
   const toast = useToast();
@@ -118,6 +118,26 @@ export default function BusinessHub() {
                       <Pressy key={o.key} onPress={() => { if (!manage) return; setBizAccent(o.key); save({ accent: o.key }, t('Color: {name}', { name: tr(o.label) })); }} haptic accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={o.label} scale={0.85} style={{ alignItems: 'center', gap: 6 }}>
                         <View style={{ width: 46, height: 46, borderRadius: r(14), backgroundColor: o.swatch, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 3 : 0, borderColor: c.text, shadowColor: o.swatch, shadowOpacity: on ? 0.55 : 0, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } }}>
                           {on && <Icon name="checkmark" size={22} color="#fff" />}
+                        </View>
+                        <Txt v="caption" tone={on ? 'text' : 'muted'}>{o.label}</Txt>
+                      </Pressy>
+                    );
+                  })}
+                </View>
+              </View>
+            </Card>
+
+            <SectionLabel>Fondo del espacio</SectionLabel>
+            <Card>
+              <View style={{ padding: 16, gap: 12 }}>
+                <Txt v="small" tone="muted">El tono de fondo de todo el espacio Business del equipo. Se ve igual en claro y oscuro, adaptado.</Txt>
+                <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap' }}>
+                  {bizToneOptions.map((o) => {
+                    const on = bizTone === o.key;
+                    return (
+                      <Pressy key={o.key} onPress={async () => { if (!manage) return toast.show('Solo el propietario o los administradores pueden cambiarlo.', 'info'); const before = bizTone; setBizTone(o.key); try { await setBusinessTone(biz.id, o.key); toast.show(t('Fondo: {name}', { name: tr(o.label) }), 'success'); } catch (e) { setBizTone(before); toast.show(friendly(e, 'No se pudo cambiar el fondo.'), 'error'); } }} haptic accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={tr(o.label)} scale={0.92} style={{ alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 46, height: 46, borderRadius: r(14), backgroundColor: mode === 'dark' ? o.swatchDark : o.swatch, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 3 : 1, borderColor: on ? c.text : c.borderStrong }}>
+                          {on && <Icon name="checkmark" size={22} color={c.text} />}
                         </View>
                         <Txt v="caption" tone={on ? 'text' : 'muted'}>{o.label}</Txt>
                       </Pressy>
