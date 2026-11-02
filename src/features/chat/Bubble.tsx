@@ -14,6 +14,9 @@ import { VideoThumb } from './VideoPlayer';
 import { VoicePlayer } from './VoicePlayer';
 import { FileCard } from '../files/FileCard';
 import { LocationCard } from '../location/LocationCard';
+import { ContactCard } from '../cards/ContactCard';
+import { EventCard } from '../cards/EventCard';
+import { parseContact, parseEvent } from '../../lib/chatCards';
 import { parseLocation } from '../../lib/geo';
 import { t, tr } from '../../i18n';
 
@@ -145,7 +148,7 @@ function BubbleBase(p: BubbleProps) {
             {deleted ? <Txt v="small" tone="faint" style={{ fontStyle: 'italic' }}>Mensaje eliminado</Txt> : (
               <>
                 {m.attachment_type && (m.attachment_path || m.localUri) && <Attachment m={m} mine={false} onOpenImage={p.onOpenImage} onOpenVideo={p.onOpenVideo} onOpenFile={p.onOpenFile} />}
-                {m.body && parseApptCard(m.body) ? <ApptCard body={m.body} mine={false} team /> : m.body && parseLocation(m.body) ? <LocationCard place={parseLocation(m.body)!} mine={false} /> : m.body ? <RichText text={m.is_automated ? tr(m.body) : m.body} color={c.text} linkColor={c.highlight} /> : null}
+                {m.body && parseApptCard(m.body) ? <ApptCard body={m.body} mine={false} team /> : m.body && parseLocation(m.body) ? <LocationCard place={parseLocation(m.body)!} mine={false} /> : m.body && parseContact(m.body) ? <ContactCard contact={parseContact(m.body)!} mine={false} /> : m.body && parseEvent(m.body) ? <EventCard event={parseEvent(m.body)!} mine={false} me={p.me} reactions={p.reactions} uid={m.id} onAnswer={(e) => p.onReact(m, e)} /> : m.body ? <RichText text={m.is_automated ? tr(m.body) : m.body} color={c.text} linkColor={c.highlight} /> : null}
               </>
             )}
           </View>
@@ -213,6 +216,8 @@ function BubbleBase(p: BubbleProps) {
                 </View>
               ) : m.poll_id && p.poll ? <PollCard poll={p.poll} mine={mine} light={mine && !incognito} onVote={(o, on) => p.onVotePoll?.(p.poll!.id, o, on)} onClose={() => p.onClosePoll?.(p.poll!.id)} />
               : m.body && parseLocation(m.body) ? <LocationCard place={parseLocation(m.body)!} mine={mine} />
+              : m.body && parseContact(m.body) ? <ContactCard contact={parseContact(m.body)!} mine={mine} />
+              : m.body && parseEvent(m.body) ? <EventCard event={parseEvent(m.body)!} mine={mine} me={p.me} reactions={p.reactions} uid={m.id} onAnswer={(e) => p.onReact(m, e)} />
               : m.body ? <RichText text={m.is_automated ? tr(m.body) : m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
             </>
           )}

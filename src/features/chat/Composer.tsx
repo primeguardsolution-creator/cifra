@@ -26,6 +26,8 @@ type Props = {
   onSchedule?: (body: string, sendAt: Date, replyTo: string | null, internal: boolean) => Promise<void> | void;
   /** Opens the new-poll sheet (direct chats and groups). */ onPoll?: () => void;
   /** Opens the share-location sheet. */ onLocation?: () => void;
+  /** Opens the send-contact picker. */ onContact?: () => void;
+  /** Opens the event form (direct chats, groups) or the appointment flow (business chats: `eventLabel` is then 'Cita'). */ onEvent?: () => void; eventLabel?: 'Evento' | 'Cita';
 };
 
 export function Composer(p: Props) {
@@ -186,9 +188,10 @@ export function Composer(p: Props) {
           { key: 'doc', label: 'Documento', art: fileArt.doc as number, on: () => run(pickDocument) },
           ...(p.onLocation ? [{ key: 'loc', label: 'Ubicación', art: fileArt.location as number, on: () => { setAttach(false); p.onLocation?.(); } }] : []),
           ...(p.onPoll ? [{ key: 'poll', label: 'Encuesta', art: fileArt.poll as number, on: () => { setAttach(false); p.onPoll?.(); } }] : []),
-          ...(p.onSchedule ? [{ key: 'sched', label: 'Programar', art: fileArt.event as number, on: () => { setAttach(false); if (!text.trim() && !file) { toast.show('Escribe el mensaje y elige Programar para enviarlo más tarde.', 'info'); input.current?.focus(); } else setSched(true); } }] : []),
+          ...(p.onContact ? [{ key: 'contact', label: 'Contacto', art: fileArt.contact as number, on: () => { setAttach(false); p.onContact?.(); } }] : []),
+          ...(p.onEvent ? [{ key: 'event', label: p.eventLabel ?? 'Evento', art: fileArt.event as number, on: () => { setAttach(false); p.onEvent?.(); } }] : []),
         ];
-        const cols = items.length <= 5 ? items.length : 3;
+        const cols = items.length <= 5 ? items.length : 3; // up to 5 in one row, otherwise a grid of 3
         return (
           <Reanimated.View entering={FadeInDown.duration(180)} exiting={FadeOutDown.duration(120)} style={{ marginHorizontal: 10, marginTop: 8, padding: 10, borderRadius: r(20), backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, flexDirection: 'row', flexWrap: 'wrap', rowGap: 10 }}>
             {items.map((it) => (

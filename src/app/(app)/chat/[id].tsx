@@ -17,6 +17,9 @@ import { DocViewer } from '../../../features/files/DocViewer';
 import { ActionBar } from '../../../features/chat/ActionBar';
 import { ChatAction, actionsFor } from '../../../lib/actions';
 import { LocationSheet } from '../../../features/location/LocationSheet';
+import { ContactSheet } from '../../../features/cards/ContactSheet';
+import { EventSheet } from '../../../features/cards/EventSheet';
+import { encodeContact, encodeEvent } from '../../../lib/chatCards';
 import { encodeLocation, geoSupported } from '../../../lib/geo';
 import { isViewable } from '../../../lib/fileKind';
 import { ConversationState, Message, fetchMemberReads, getProfiles, QuickReply, ScheduledRow, TeamMember, blockUser, cancelScheduled, listScheduled, saveContact, scheduleMessage, starMessage, starredIds, leaveConversation, listBlocked, listQuickReplies, listTeam, unblockUser, updateBusinessConversation } from '../../../lib/api';
@@ -90,6 +93,8 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
   const [viewer, setViewer] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(null);
   const [locOpen, setLocOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
   const [bizActions, setBizActions] = useState<ChatAction[]>([]);
   const [doc, setDoc] = useState<{ url: string; name: string; mime: string | null; size: number | null } | null>(null);
   const [menu, setMenu] = useState(false);
@@ -314,6 +319,9 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
           onSchedule={incognito ? undefined : async (body, at, replyTo, internal) => { await scheduleMessage(me, { conversation_id: id, body, send_at: at.toISOString(), reply_to_id: replyTo, is_internal: internal }); loadScheduled(); }}
           onPoll={(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito ? () => setPollOpen(true) : undefined}
           onLocation={geoSupported() ? () => setLocOpen(true) : undefined}
+          onContact={(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito ? () => setContactOpen(true) : undefined}
+          eventLabel={chat?.kind === 'business' ? 'Cita' : 'Evento'}
+          onEvent={incognito ? undefined : chat?.kind === 'business' ? () => { if (customerOfBusiness && chat.business_id) router.push({ pathname: '/b/[id]', params: { id: chat.business_id, book: '1' } }); else router.push('/agenda'); } : () => setEventOpen(true)}
           onSend={(v) => guard(() => conv.send({ body: v.body, file: v.file, internal: v.internal, replyTo: v.replyTo }))}
           onEditSave={(mid, text) => { setEditing(null); guard(() => conv.edit(mid, text)); }}
         />
@@ -396,6 +404,8 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
       {chat && <ReportSheet visible={report} onClose={() => setReport(false)} me={me} peerId={directPeer} businessId={chat.kind === 'business' && !agent ? chat.business_id : null} conversationId={id} name={chatTitle(chat)} onBlocked={() => setBlocked(true)} />}
 
       <VideoModal url={video} onClose={() => setVideo(null)} />
+      <ContactSheet visible={contactOpen} onClose={() => setContactOpen(false)} onSend={(c) => conv.send({ body: encodeContact(c) })} exclude={[me]} />
+      <EventSheet visible={eventOpen} onClose={() => setEventOpen(false)} onSend={(e) => conv.send({ body: encodeEvent(e) })} />
       <LocationSheet visible={locOpen} onClose={() => setLocOpen(false)} onSend={(pl) => conv.send({ body: encodeLocation(pl) })} />
       <DocViewer visible={!!doc} url={doc?.url ?? null} name={doc?.name ?? ''} mime={doc?.mime} size={doc?.size} onClose={() => setDoc(null)} />
       <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer(null)}>
