@@ -45,6 +45,7 @@ export const fileKindMeta: Record<FileKind, { label: string; icon: IconName; col
  */
 export const fileArt: Partial<Record<FileKind | 'location' | 'live-location' | 'contact' | 'event' | 'poll' | 'voice', ImageSourcePropType>> = {
   pdf: require('../../assets/art/files/pdf.webp'),
+  poll: require('../../assets/art/files/poll.webp'),
   slides: require('../../assets/art/files/slides.webp'),
   audio: require('../../assets/art/files/audio.webp'),
   event: require('../../assets/art/files/event.webp'),
