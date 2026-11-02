@@ -143,7 +143,7 @@ function BubbleBase(p: BubbleProps) {
             {deleted ? <Txt v="small" tone="faint" style={{ fontStyle: 'italic' }}>Mensaje eliminado</Txt> : (
               <>
                 {m.attachment_type && (m.attachment_path || m.localUri) && <Attachment m={m} mine={false} onOpenImage={p.onOpenImage} onOpenVideo={p.onOpenVideo} onOpenFile={p.onOpenFile} />}
-                {m.body && parseApptCard(m.body) ? <ApptCard body={m.body} mine={false} team /> : m.body ? <RichText text={m.body} color={c.text} linkColor={c.highlight} /> : null}
+                {m.body && parseApptCard(m.body) ? <ApptCard body={m.body} mine={false} team /> : m.body ? <RichText text={m.is_automated ? tr(m.body) : m.body} color={c.text} linkColor={c.highlight} /> : null}
               </>
             )}
           </View>
@@ -210,7 +210,7 @@ function BubbleBase(p: BubbleProps) {
                   {p.onCallBack && <Pressy onPress={() => p.onCallBack!(m.body!.startsWith('📹') ? 'video' : 'audio')} accessibilityRole="button" accessibilityLabel="Devolver la llamada" scale={0.9} style={{ paddingHorizontal: 11, height: 30, borderRadius: 15, backgroundColor: mine ? 'rgba(255,255,255,0.18)' : c.accent, justifyContent: 'center' }}><Txt v="caption" style={{ color: mine ? c.bubbleOutText : c.accentText, fontFamily: 'Inter_600SemiBold' }}>{mine ? 'Repetir' : 'Devolver'}</Txt></Pressy>}
                 </View>
               ) : m.poll_id && p.poll ? <PollCard poll={p.poll} mine={mine} light={mine && !incognito} onVote={(o, on) => p.onVotePoll?.(p.poll!.id, o, on)} onClose={() => p.onClosePoll?.(p.poll!.id)} />
-              : m.body ? <RichText text={m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
+              : m.body ? <RichText text={m.is_automated ? tr(m.body) : m.body} color={fg} linkColor={mine ? (incognito ? c.bubbleOutText : '#BFF0DD') : c.accent} /> : null}
             </>
           )}
           {m.is_broadcast && !mine && p.onBroadcastOptOut && !deleted && <Pressy onPress={p.onBroadcastOptOut} accessibilityRole="button" scale={0.97} style={{ marginTop: 6, alignSelf: 'flex-start' }}><Txt v="caption" style={{ color: c.accent, textDecorationLine: 'underline' }}>No recibir más difusiones de este negocio</Txt></Pressy>}

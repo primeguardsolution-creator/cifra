@@ -1503,4 +1503,7 @@ export const rows: [string, string, string][] = [
   ["Archivo comprimido", "Compressed file", "Komprimierte Datei"],
   ["Audio", "Audio", "Audio"],
   ["Imagen", "Image", "Bild"],
+  ["Chat incógnito. Se autodestruye tras 3 horas sin actividad o en cuanto ambos lo pidan.", "Incognito chat. It self-destructs after 3 hours without activity, or as soon as both of you ask.", "Inkognito-Chat. Er zerstört sich nach 3 Stunden ohne Aktivität oder sobald ihr beide es wollt."],
+  ["🤝 Sala de negociación. Aquí puedes compartir archivos, hacer encuestas y llamar en grupo.", "🤝 Negotiation room. Here you can share files, run polls and make group calls.", "🤝 Verhandlungsraum. Hier kannst du Dateien teilen, Umfragen starten und Gruppenanrufe machen."],
+  ["Destruyendo…", "Destroying…", "Wird zerstört…"],
 ];
