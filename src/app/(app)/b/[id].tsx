@@ -37,7 +37,7 @@ function PostThumb({ s, onPress }: { s: StatusRow; onPress: () => void }) {
 }
 
 export default function BusinessProfile() {
-  const { id, chat } = useLocalSearchParams<{ id: string; chat?: string }>();
+  const { id, chat, book } = useLocalSearchParams<{ id: string; chat?: string; book?: string }>();
   const { c } = useTheme();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -58,6 +58,7 @@ export default function BusinessProfile() {
         if (!isUuid(id)) { const hit = (await searchBusinesses(id)).find((b) => b.handle === id.toLowerCase()); bid = hit?.id ?? ''; }
         const data = bid ? await getPublicBusiness(bid) : null;
         if (live) setBiz(data);
+        if (live && data && book) { setSlot(null); setReqOpen(true); }
         if (bid) listBusinessPosts([bid]).then((p) => live && setPosts(p)).catch(() => {});
       } catch (e) { if (live) { setBiz(null); toast.show(friendly(e), 'error'); } }
     })();
