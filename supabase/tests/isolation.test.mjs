@@ -1210,5 +1210,22 @@ await check('Integraciones: webhooks, eventos, cola de entrega y claves de API',
   eq((await q(`select public.api_key_auth($1) as b`, [hash]))[0].b, null, 'revoked key');
 });
 
+await db.exec(migration('20261112_000025_unarchive_on_message.sql'));
+await db.exec(migration('20261112_000025_unarchive_on_message.sql'));
+await check('Archivados: un mensaje nuevo devuelve el chat a la lista (salvo silenciado)', async () => {
+  const cid = await as('ana', async () => (await q(`select public.start_direct_chat($1) as id`, [ids.ben]))[0].id);
+  const flag = async (u) => (await q(`select archived from public.conversation_members where conversation_id = $1 and user_id = $2`, [cid, ids[u]]))[0].archived;
+  await q(`update public.conversation_members set archived = true where conversation_id = $1`, [cid]);
+  await as('ana', async () => q(`insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'hola')`, [cid, ids.ana]));
+  eq([await flag('ana'), await flag('ben')], [false, false], 'sender and receiver both get it back');
+  await q(`update public.conversation_members set archived = true where conversation_id = $1`, [cid]);
+  await q(`update public.conversation_members set muted_until = now() + interval '1 day' where conversation_id = $1 and user_id = $2`, [cid, ids.ben]);
+  await as('ana', async () => q(`insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'otra')`, [cid, ids.ana]));
+  eq([await flag('ana'), await flag('ben')], [false, true], 'muted + archived stays archived');
+  await q(`update public.conversation_members set archived = true where conversation_id = $1 and user_id = $2`, [cid, ids.ana]);
+  await as('ben', async () => q(`insert into public.messages (conversation_id, sender_id, body, is_internal) values ($1, $2, 'nota', false)`, [cid, ids.ben]));
+  eq(await flag('ben'), false, 'writing in it unarchives it for the author');
+});
+
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);

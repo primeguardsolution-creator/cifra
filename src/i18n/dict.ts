@@ -1525,4 +1525,6 @@ export const rows: [string, string, string][] = [
   ["Enviar esta ubicación", "Send this location", "Diesen Standort senden"],
   ["Se envía una vez; no te seguimos.", "Sent once; we do not track you.", "Wird einmal gesendet; wir verfolgen dich nicht."],
   ["© OpenStreetMap", "© OpenStreetMap", "© OpenStreetMap"],
+  ["Archivados · {n}", "Archived · {n}", "Archiviert · {n}"],
+  ["{n} chats", "{n} chats", "{n} Chats"],
 ];
