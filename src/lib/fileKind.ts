@@ -44,6 +44,11 @@ export const fileKindMeta: Record<FileKind, { label: string; icon: IconName; col
  * To add one: save it as assets/art/files/<kind>.webp and add `pdf: require('../../assets/art/files/pdf.webp')` here.
  */
 export const fileArt: Partial<Record<FileKind | 'location' | 'live-location' | 'contact' | 'event' | 'poll' | 'voice', ImageSourcePropType>> = {
+  pdf: require('../../assets/art/files/pdf.webp'),
+  sheet: require('../../assets/art/files/sheet.webp'),
+  archive: require('../../assets/art/files/archive.webp'),
+  location: require('../../assets/art/files/location.webp'),
+  voice: require('../../assets/art/files/voice.webp'),
   doc: require('../../assets/art/files/doc.webp'),
   video: require('../../assets/art/files/video.webp'),
   other: require('../../assets/art/files/other.webp'),
