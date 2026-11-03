@@ -321,6 +321,8 @@ function ChatBody({ id, me, jumpToParam, conv }: { id: string; me: string; jumpT
           onPoll={(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito ? () => setPollOpen(true) : undefined}
           onLocation={geoSupported() ? () => setLocOpen(true) : undefined}
           onContact={(chat?.kind === 'direct' || chat?.kind === 'group') && !incognito ? () => setContactOpen(true) : undefined}
+          onCatalog={customerOfBusiness && chat?.business_id ? () => runAction(bizActions.find((a) => a.type === 'catalog') ?? { type: 'catalog', label: 'Ver catálogo' }) : undefined}
+          onPay={customerOfBusiness ? (() => { const a = bizActions.find((x) => x.type === 'payment' && x.url); return a ? () => runAction(a) : undefined; })() : undefined}
           eventLabel={chat?.kind === 'business' ? 'Cita' : 'Evento'}
           onEvent={incognito ? undefined : chat?.kind === 'business' ? () => { if (customerOfBusiness && chat.business_id) router.push({ pathname: '/b/[id]', params: { id: chat.business_id, book: '1' } }); else router.push('/agenda'); } : () => setEventOpen(true)}
           onSend={(v) => guard(() => conv.send({ body: v.body, file: v.file, internal: v.internal, replyTo: v.replyTo }))}

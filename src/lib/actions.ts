@@ -2,7 +2,7 @@ import { rpc, unwrap } from './api';
 import type { IconName } from '../ui';
 import { supabase } from './supabase';
 
-export type ActionType = 'appointment' | 'catalog' | 'call' | 'human' | 'link';
+export type ActionType = 'appointment' | 'catalog' | 'call' | 'human' | 'link' | 'payment';
 export type ChatAction = { type: ActionType; label: string; url?: string | null; enabled?: boolean };
 
 export const ACTION_META: Record<ActionType, { name: string; icon: IconName; hint: string }> = {
@@ -10,6 +10,7 @@ export const ACTION_META: Record<ActionType, { name: string; icon: IconName; hin
   catalog: { name: 'Ver catálogo', icon: 'pricetags', hint: 'Abre el catálogo del negocio' },
   call: { name: 'Llamar', icon: 'call', hint: 'Llama al equipo por internet' },
   human: { name: 'Hablar con una persona', icon: 'person', hint: 'Avisa al equipo de que el cliente quiere una persona' },
+  payment: { name: 'Pagar', icon: 'card', hint: 'Abre tu enlace de pago' },
   link: { name: 'Enlace', icon: 'link', hint: 'Abre el enlace que pongas' },
 };
 

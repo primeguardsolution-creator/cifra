@@ -27,7 +27,7 @@ type Props = {
   /** Opens the new-poll sheet (direct chats and groups). */ onPoll?: () => void;
   /** Opens the share-location sheet. */ onLocation?: () => void;
   /** Opens the send-contact picker. */ onContact?: () => void;
-  /** Opens the event form (direct chats, groups) or the appointment flow (business chats: `eventLabel` is then 'Cita'). */ onEvent?: () => void; eventLabel?: 'Evento' | 'Cita';
+  /** Opens the event form (direct chats, groups) or the appointment flow (business chats: `eventLabel` is then 'Cita'). */ onEvent?: () => void; /** Customer view of a business chat: the catalog, and the payment link when the business set one. */ onCatalog?: () => void; onPay?: () => void; eventLabel?: 'Evento' | 'Cita';
 };
 
 export function Composer(p: Props) {
@@ -184,11 +184,13 @@ export function Composer(p: Props) {
       {attach && !p.editing && (() => {
         const items: { key: string; label: string; art?: number; icon?: IconName; on: () => void }[] = [
           { key: 'media', label: 'Galería', art: fileArt.image as number, on: () => run(pickChatMedia) },
-          ...(Platform.OS !== 'web' ? [{ key: 'camera', label: 'Cámara', icon: 'camera' as IconName, on: () => run(takePhoto) }] : []),
+          ...(Platform.OS !== 'web' || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ? [{ key: 'camera', label: 'Cámara', art: fileArt.camera as number, on: () => run(takePhoto) }] : []),
           { key: 'doc', label: 'Documento', art: fileArt.doc as number, on: () => run(pickDocument) },
           ...(p.onLocation ? [{ key: 'loc', label: 'Ubicación', art: fileArt.location as number, on: () => { setAttach(false); p.onLocation?.(); } }] : []),
           ...(p.onPoll ? [{ key: 'poll', label: 'Encuesta', art: fileArt.poll as number, on: () => { setAttach(false); p.onPoll?.(); } }] : []),
           ...(p.onContact ? [{ key: 'contact', label: 'Contacto', art: fileArt.contact as number, on: () => { setAttach(false); p.onContact?.(); } }] : []),
+          ...(p.onCatalog ? [{ key: 'catalog', label: 'Catálogo', art: fileArt.catalog as number, on: () => { setAttach(false); p.onCatalog?.(); } }] : []),
+          ...(p.onPay ? [{ key: 'pay', label: 'Pago', art: fileArt.payment as number, on: () => { setAttach(false); p.onPay?.(); } }] : []),
           ...(p.onEvent ? [{ key: 'event', label: p.eventLabel ?? 'Evento', art: fileArt.event as number, on: () => { setAttach(false); p.onEvent?.(); } }] : []),
         ];
         const cols = items.length <= 5 ? items.length : 3; // up to 5 in one row, otherwise a grid of 3
