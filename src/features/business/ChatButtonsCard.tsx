@@ -20,7 +20,7 @@ export function ChatButtonsCard({ businessId }: { businessId: string }) {
 
   const set = (i: number, patch: Partial<ChatAction>) => setList((cur) => cur?.map((a, j) => (j === i ? { ...a, ...patch } : a)) ?? cur);
   const move = (i: number, d: -1 | 1) => setList((cur) => { if (!cur) return cur; const j = i + d; if (j < 0 || j >= cur.length) return cur; const n = [...cur]; [n[i], n[j]] = [n[j], n[i]]; return n; });
-  const badUrl = list.some((a) => !validActionUrl(a.url ?? '') || (a.type === 'link' && !(a.url ?? '').trim()));
+  const badUrl = list.some((a) => !validActionUrl(a.url ?? '') || ((a.type === 'link' || a.type === 'payment') && !(a.url ?? '').trim()));
   const dirty = JSON.stringify(list) !== saved;
   const save = async () => {
     setBusy(true);
@@ -45,12 +45,13 @@ export function ChatButtonsCard({ businessId }: { businessId: string }) {
             </View>
             {/* Default labels are stored in Spanish and shown in the app language; once you type your own text it is kept as typed. */}
             <Field label="Texto del botón" value={a.label === ACTION_META[a.type].name ? tr(a.label) : a.label} onChangeText={(v) => set(i, { label: v === tr(ACTION_META[a.type].name) ? ACTION_META[a.type].name : v })} maxLength={40} />
-            <Field label={a.type === 'link' ? 'URL (obligatoria)' : 'URL (opcional)'} value={a.url ?? ''} onChangeText={(v) => set(i, { url: v })} placeholder={a.type === 'call' ? 'tel:+34600123456' : 'https://…'} autoCapitalize="none" keyboardType="url"
+            <Field label={a.type === 'link' || a.type === 'payment' ? 'URL (obligatoria)' : 'URL (opcional)'} value={a.url ?? ''} onChangeText={(v) => set(i, { url: v })} placeholder={a.type === 'call' ? 'tel:+34600123456' : a.type === 'payment' ? 'https://pay.tuempresa.com/…' : 'https://…'} autoCapitalize="none" keyboardType="url"
               error={!validActionUrl(a.url ?? '') ? 'Usa https://, tel: o mailto:' : undefined} />
-            {a.type === 'link' && <Button title="Quitar este botón" variant="soft" size="sm" icon="trash" onPress={() => setList((cur) => cur?.filter((_, j) => j !== i) ?? cur)} />}
+            {(a.type === 'link' || a.type === 'payment') && <Button title="Quitar este botón" variant="soft" size="sm" icon="trash" onPress={() => setList((cur) => cur?.filter((_, j) => j !== i) ?? cur)} />}
           </View>
         </View>
       ))}
+      {list.length < MAX && !list.some((a) => a.type === 'payment') && <><Divider /><SheetRow icon="card" label="Añadir botón de pago" tone="accent" onPress={() => setList((cur) => [...(cur ?? []), { type: 'payment' as ActionType, label: ACTION_META.payment.name, url: '', enabled: true }])} /></>}
       {list.length < MAX && <><Divider /><SheetRow icon="add-circle" label="Añadir botón de enlace" tone="accent" onPress={() => setList((cur) => [...(cur ?? []), { type: 'link' as ActionType, label: '', url: '', enabled: true }])} /></>}
       <Divider />
       <View style={{ padding: 14 }}><Button title="Guardar botones" loading={busy} disabled={!dirty || badUrl} onPress={save} /></View>

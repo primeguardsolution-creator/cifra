@@ -1584,4 +1584,8 @@ export const rows: [string, string, string][] = [
   ["Nice try 😏", "Nice try 😏", "Netter Versuch 😏"],
   ["Esto es incógnito. Aquí no se guardan capturas: lo que se dice aquí, se queda aquí.", "This is incognito. No screenshots here: what's said here, stays here.", "Das ist Inkognito. Hier gibt es keine Screenshots: Was hier gesagt wird, bleibt hier."],
   ["Volver al chat", "Back to chat", "Zurück zum Chat"],
+  ["Añadir botón de pago", "Add payment button", "Zahlungsbutton hinzufügen"],
+  ["Pago", "Payment", "Zahlung"],
+  ["Pagar", "Pay", "Bezahlen"],
+  ["Abre tu enlace de pago", "Opens your payment link", "Öffnet deinen Zahlungslink"],
 ];

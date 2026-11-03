@@ -1228,21 +1228,22 @@ await check('Archivados: un mensaje nuevo devuelve el chat a la lista (salvo sil
 });
 
 await db.exec(migration('20261113_000026_chat_actions.sql'));
-await db.exec(migration('20261113_000026_chat_actions.sql'));
+await db.exec(migration('20261114_000027_payment_action.sql'));
+await db.exec(migration('20261114_000027_payment_action.sql'));
 await check('Botones del chat: los configura el equipo y los ve quien puede chatear con el negocio', async () => {
   const [{ id: biz }] = await q(`select id from public.businesses where name = 'Solapes SL'`);
-  const list = [{ type: 'appointment', label: 'Reservar cita', enabled: true }, { type: 'catalog', label: 'Ver catalogo', url: 'https://tienda.example.com/catalogo', enabled: true }, { type: 'human', label: 'Hablar con una persona', enabled: false }, { type: 'link', label: 'Pagar', url: 'https://pay.example.com/x', enabled: true }];
+  const list = [{ type: 'appointment', label: 'Reservar cita', enabled: true }, { type: 'catalog', label: 'Ver catalogo', url: 'https://tienda.example.com/catalogo', enabled: true }, { type: 'human', label: 'Hablar con una persona', enabled: false }, { type: 'link', label: 'Enlace', url: 'https://pay.example.com/x', enabled: true }, { type: 'payment', label: 'Pagar', url: 'https://pay.example.com/p', enabled: true }];
   await as('dani', async () => q(`select public.set_business_actions($1, $2)`, [biz, JSON.stringify(list)]));
   const seen = await as('ben', async () => (await q(`select public.business_actions_for($1) as r`, [biz]))[0].r);
-  eq([seen.configured, seen.actions.map((a) => a.type)], [true, ['appointment', 'catalog', 'link']], 'disabled ones are hidden, order kept');
+  eq([seen.configured, seen.actions.map((a) => a.type)], [true, ['appointment', 'catalog', 'link', 'payment']], 'disabled ones are hidden, order kept');
   eq(seen.actions[1].url, 'https://tienda.example.com/catalogo');
   await as('ben', async () => denied(db.query(`select public.set_business_actions($1, '[]')`, [biz]), 'customers cannot edit'));
   await as('ben', async () => eq((await q(`select * from public.business_actions`)).length, 0, 'table is team-only'));
-  await as('dani', async () => eq((await q(`select * from public.business_actions where business_id = $1`, [biz])).length, 4));
-  for (const bad of [[{ type: 'hack', label: 'x' }], [{ type: 'link', label: 'x' }], [{ type: 'link', label: 'x', url: 'javascript:alert(1)' }], [{ type: 'link', label: 'x', url: 'http://plain.example.com' }], [{ type: 'catalog', label: '' }], Array.from({ length: 9 }, () => ({ type: 'catalog', label: 'x' }))]) {
+  await as('dani', async () => eq((await q(`select * from public.business_actions where business_id = $1`, [biz])).length, 5));
+  for (const bad of [[{ type: 'hack', label: 'x' }], [{ type: 'link', label: 'x' }], [{ type: 'payment', label: 'x' }], [{ type: 'link', label: 'x', url: 'javascript:alert(1)' }], [{ type: 'link', label: 'x', url: 'http://plain.example.com' }], [{ type: 'catalog', label: '' }], Array.from({ length: 9 }, () => ({ type: 'catalog', label: 'x' }))]) {
     await as('dani', async () => denied(db.query(`select public.set_business_actions($1, $2)`, [biz, JSON.stringify(bad)]), JSON.stringify(bad).slice(0, 50)));
   }
-  eq((await q(`select count(*)::int as n from public.business_actions where business_id = $1`, [biz]))[0].n, 4, 'a rejected save leaves the list untouched');
+  eq((await q(`select count(*)::int as n from public.business_actions where business_id = $1`, [biz]))[0].n, 5, 'a rejected save leaves the list untouched');
   await as('dani', async () => q(`select public.set_business_actions($1, $2)`, [biz, JSON.stringify([{ type: 'call', label: 'Llamar', url: 'tel:+34600111222' }, { type: 'link', label: 'Mail', url: 'mailto:hola@example.com' }])]));
   eq((await as('ben', async () => (await q(`select public.business_actions_for($1) as r`, [biz]))[0].r)).actions.length, 2);
   await as('dani', async () => q(`select public.set_business_actions($1, '[]')`, [biz]));
